@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
@@ -8,12 +8,15 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useForm } from 'react-hook-form';
 import { ServiceType } from '@/types/service';
+import { createServiceRequest } from '@/lib/services-api';
+import { toast } from 'sonner';
 
 interface ServiceFormProps {
   service: ServiceType;
 }
 
 const ServiceForm: React.FC<ServiceFormProps> = ({ service }) => {
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const form = useForm({
     defaultValues: {
       name: '',
@@ -25,11 +28,26 @@ const ServiceForm: React.FC<ServiceFormProps> = ({ service }) => {
     },
   });
 
-  const onSubmit = (data: any) => {
-    console.log(data);
-    // Here you would normally submit the form data to your backend
-    alert('Service request submitted successfully!');
-    form.reset();
+  const onSubmit = async (data: any) => {
+    setIsSubmitting(true);
+    try {
+      await createServiceRequest({
+        serviceTitle: service.name,
+        fullName: data.name,
+        email: data.email,
+        phoneNumber: data.phone,
+        projectDescription: data.description,
+        budget: data.budget,
+        timeline: data.timeline
+      });
+      toast.success('Service request submitted successfully!');
+      form.reset();
+    } catch (error) {
+      console.error('Error submitting service request:', error);
+      toast.error('Failed to submit service request');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -152,8 +170,8 @@ const ServiceForm: React.FC<ServiceFormProps> = ({ service }) => {
             </div>
             
             <CardFooter className="px-0 pt-4">
-              <Button type="submit" className="w-full">
-                Submit Request
+              <Button type="submit" className="w-full" disabled={isSubmitting}>
+                {isSubmitting ? 'Submitting...' : 'Submit Request'}
               </Button>
             </CardFooter>
           </form>

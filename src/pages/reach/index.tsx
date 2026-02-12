@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Sidebar from '@/components/layout/Sidebar';
 import Header from '@/components/layout/Header';
 import OrderSelector from '@/components/reach/OrderSelector';
@@ -26,10 +26,49 @@ import { formatNumber } from '@/components/influencers/utils/formatUtils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Lock } from 'lucide-react';
 import { addDays, subDays, subHours } from 'date-fns';
+import { Button } from '@/components/ui/button';
+import { useNavigate } from 'react-router-dom';
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
 const ReachPage = () => {
+  const navigate = useNavigate();
   const [selectedOrder, setSelectedOrder] = useState<string>("1");
   const [timeRange, setTimeRange] = useState<string>('last_24_hours');
+  const [hasAccess, setHasAccess] = useState<boolean | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    checkSubscription();
+  }, []);
+
+  const checkSubscription = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_URL}/billing/subscription`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      const data = await response.json();
+      console.log('Subscription data:', data);
+      
+      if (data.success && data.subscription) {
+        const planName = data.subscription.plan_name?.toLowerCase();
+        console.log('Plan name:', planName);
+        setHasAccess(planName !== 'free plan');
+      } else {
+        console.log('No subscription found');
+        setHasAccess(false);
+      }
+    } catch (error) {
+      console.error('Error checking subscription:', error);
+      setHasAccess(false);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const calculateDates = (range: string) => {
     const now = new Date();
@@ -80,6 +119,24 @@ const ReachPage = () => {
       <div className="flex-1 flex flex-col">
         <Header />
         <main className="flex-1 overflow-auto p-6">
+          {loading ? (
+            <div className="flex items-center justify-center h-full">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+            </div>
+          ) : !hasAccess ? (
+            <div className="flex items-center justify-center h-full">
+              <div className="text-center space-y-4 max-w-md">
+                <Lock className="h-16 w-16 mx-auto text-muted-foreground" />
+                <h2 className="text-2xl font-bold text-foreground">Upgrade to Access Reach Analytics</h2>
+                <p className="text-muted-foreground">
+                  This feature is only available for paid subscribers. Upgrade your plan to unlock detailed reach analytics and insights.
+                </p>
+                <Button onClick={() => navigate('/billing')} size="lg">
+                  Upgrade Now
+                </Button>
+              </div>
+            </div>
+          ) : (
           <div className="max-w-7xl mx-auto space-y-6">
             <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-end">
               <div className="w-full lg:w-auto lg:min-w-[350px]">
@@ -242,6 +299,7 @@ const ReachPage = () => {
               </div>
             </div>
           </div>
+          )}
         </main>
       </div>
     </div>

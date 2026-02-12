@@ -25,6 +25,18 @@ interface UserProfileMenuProps {
 const UserProfileMenu: React.FC<UserProfileMenuProps> = ({ userData }) => {
   const navigate = useNavigate();
   const userType = localStorage.getItem('userType') || 'business';
+  let userId = localStorage.getItem('userId');
+  
+  // Fallback: get userId from userData if not directly available
+  if (!userId) {
+    const storedUserData = localStorage.getItem('userData');
+    if (storedUserData) {
+      const parsedData = JSON.parse(storedUserData);
+      userId = parsedData.id;
+    }
+  }
+  
+  console.log('UserProfileMenu userId:', userId);
 
   const handleLogout = async () => {
     try {
@@ -41,7 +53,7 @@ const UserProfileMenu: React.FC<UserProfileMenuProps> = ({ userData }) => {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button className="flex items-center gap-2 hover:bg-gray-50 p-1 rounded-lg transition-all duration-300">
+        <button className="flex items-center gap-2 hover:bg-accent p-1 rounded-lg transition-all duration-300">
           <Avatar>
             {userData.avatarUrl ? (
               <AvatarImage 
@@ -55,19 +67,19 @@ const UserProfileMenu: React.FC<UserProfileMenuProps> = ({ userData }) => {
               </AvatarFallback>
             )}
           </Avatar>
-          <div className="text-left">
-            <div className="text-sm font-medium">{userData.fullName}</div>
-            <div className="text-xs text-gray-500">{userData.email}</div>
+          <div className="text-left hidden md:block">
+            <div className="text-sm font-medium text-foreground">{userData.fullName}</div>
+            <div className="text-xs text-muted-foreground">{userData.email}</div>
           </div>
-          <ChevronDown className="h-4 w-4 text-gray-500" />
+          <ChevronDown className="h-4 w-4 text-muted-foreground" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-56 animate-fade-in" align="end">
         <DropdownMenuLabel>My Account</DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem className="cursor-pointer flex items-center gap-2">
+        <DropdownMenuItem className="cursor-pointer flex items-center gap-2" onClick={() => navigate(`/profile/${userId}`)}>
           <User className="h-4 w-4" />
-          <Link to={`/account/${userType}`} className="w-full">Profile</Link>
+          <span>Profile</span>
         </DropdownMenuItem>
         <DropdownMenuItem className="cursor-pointer flex items-center gap-2">
           <Settings className="h-4 w-4" />

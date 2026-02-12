@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/components/ui/use-toast';
 import { InfluencerRequest, RequestStatus, ServiceType } from '@/types/request';
 import { toast } from 'sonner';
+import { fetchDashboardMetrics } from '@/lib/dashboard-api';
+import { fetchTopInfluencers, fetchTopBusinessUsers } from '@/lib/top-users-api';
+import { fetchPendingOrders } from '@/lib/orders-api';
 
 interface DashboardData {
   totalSpent: number;
@@ -147,46 +149,45 @@ export const useBusinessDashboardData = () => {
     ordersCount: 14
   }]);
   
-  const [pendingOrders, setPendingOrders] = useState([{
-    id: '1',
-    title: 'Influencer Campaign - Summer',
-    influencerName: 'Priya Sharma',
-    platforms: ['Instagram', 'Youtube'],
-    serviceTypes: ['reel', 'video'],
-    status: 'pending',
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 3).toISOString()
-  }, {
-    id: '2',
-    title: 'Product Launch - Spring',
-    influencerName: 'Raj Malhotra',
-    platforms: ['Facebook'],
-    serviceTypes: ['post'],
-    status: 'pending',
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 6).toISOString()
-  }, {
-    id: '3',
-    title: 'Brand Awareness - Winter',
-    influencerName: 'Aisha Khan',
-    platforms: ['Twitter', 'Instagram'],
-    serviceTypes: ['story', 'post'],
-    status: 'pending',
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 9).toISOString()
-  }, {
-    id: '4',
-    title: 'Engagement Boost - Autumn',
-    influencerName: 'Vikram Patel',
-    platforms: ['Youtube'],
-    serviceTypes: ['short'],
-    status: 'awaiting',
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2).toISOString()
-  }]);
+  const [pendingOrders, setPendingOrders] = useState<any[]>([]);
   
   const { toast: uiToast } = useToast();
   const navigate = useNavigate();
 
   useEffect(() => {
     fetchDashboardData();
+    loadTopUsers();
   }, [navigate]);
+
+  const loadTopUsers = async () => {
+    try {
+      const [influencers, businessUsers, orders] = await Promise.all([
+        fetchTopInfluencers(),
+        fetchTopBusinessUsers(),
+        fetchPendingOrders()
+      ]);
+      
+      setTopInfluencers(influencers.map((inf: any) => ({
+        id: inf.id,
+        name: inf.name,
+        username: inf.name.toLowerCase().replace(/\s+/g, ''),
+        profileImage: inf.profile_pic,
+        ordersCount: inf.order_count
+      })));
+      
+      setTopBusinessUsers(businessUsers.map((bus: any) => ({
+        id: bus.id,
+        name: bus.name,
+        username: bus.email.split('@')[0],
+        profileImage: bus.img,
+        ordersCount: bus.orders
+      })));
+      
+      setPendingOrders(orders);
+    } catch (error) {
+      console.error('Error loading top users:', error);
+    }
+  };
 
   const calculateImpactScore = (
     engagementRate: number,
@@ -214,197 +215,31 @@ export const useBusinessDashboardData = () => {
   const fetchDashboardData = async () => {
     setIsLoading(true);
     try {
-      // Get current user
-      const { data: { user } } = await supabase.auth.getUser();
+      const userData = localStorage.getItem('userData');
+      const user = userData ? JSON.parse(userData) : null;
+      
       if (!user) {
         navigate('/signin');
         return;
       }
 
-      // Fetch order requests for this business
-      const { data: orderRequests, error: requestsError } = await supabase
-        .from('order_requests')
-        .select(`
-          id,
-          service_type,
-          platform,
-          price,
-          currency,
-          status,
-          description,
-          created_at,
-          updated_at,
-          influencer_id,
-          business_id,
-          influencer_profiles:influencer_id(id, user_profiles(first_name, last_name, profile_image_url))
-        `)
-        .eq('business_id', user.id)
-        .order('created_at', { ascending: false });
+      const data = await fetchDashboardMetrics();
       
-      if (requestsError) {
-        throw requestsError;
-      }
-
-      // Fetch post metrics for reach and engagement calculation
-      const { data: postMetrics, error: metricsError } = await supabase
-        .from('posts')
-        .select(`
-          id,
-          post_type,
-          post_metrics(reach, impressions, engagement_rate)
-        `)
-        .eq('business_id', user.id);
-      
-      if (metricsError) {
-        throw metricsError;
-      }
-
-      // Calculate metrics
-      const totalSpentValue = orderRequests.reduce((sum, req) => sum + (req.price || 0), 0);
-      const completedCount = orderRequests.filter(req => req.status === 'completed').length;
-      const totalOrdersCount = orderRequests.length;
-      const activeRequestsCount = orderRequests.filter(req => req.status === 'pending' || req.status === 'approved').length;
-
-      // Calculate unique influencers
-      const uniqueInfluencers = new Set();
-      orderRequests.forEach(req => {
-        if (req.influencer_id) {
-          uniqueInfluencers.add(req.influencer_id);
-        }
-      });
-      const connectedInfluencersCount = uniqueInfluencers.size;
-
-      // Calculate content type counts
-      const postTypes = {
-        total: postMetrics.length,
-        reels: postMetrics.filter(post => post.post_type === 'reel').length,
-        videos: postMetrics.filter(post => post.post_type === 'video').length,
-        shorts: postMetrics.filter(post => post.post_type === 'short').length
-      };
-
-      // Calculate total reach
-      let totalReachValue = 0;
-      postMetrics.forEach(post => {
-        if (post.post_metrics && post.post_metrics.length > 0) {
-          totalReachValue += post.post_metrics.reduce((sum, metric) => sum + (metric.reach || 0), 0);
-        }
-      });
-
-      // Calculate impact score components
-      const avgEngagementRate = postMetrics.length > 0 
-        ? postMetrics.reduce((sum, post) => {
-            if (post.post_metrics && post.post_metrics.length > 0) {
-              return sum + post.post_metrics.reduce((metricSum, metric) => metricSum + (metric.engagement_rate || 0), 0);
-            }
-            return sum;
-          }, 0) / postMetrics.length
-        : 0;
-
-      const reachScore = totalReachValue > 0 
-        ? Math.min((totalReachValue / 100000) * 100, 100) 
-        : 0;
-
-      const consistencyScore = totalOrdersCount > 0 
-        ? (completedCount / totalOrdersCount) * 100 
-        : 0;
-
-      const platformDiversityScore = Math.min((Object.keys(postTypes).length / 4) * 100, 100);
-
-      const orderCompletionScore = totalOrdersCount > 0 
-        ? (completedCount / totalOrdersCount) * 100 
-        : 0;
-
-      const impactScore = calculateImpactScore(
-        avgEngagementRate,
-        reachScore,
-        consistencyScore,
-        platformDiversityScore,
-        orderCompletionScore
-      );
-
-      // Ensure impactScore is a valid number
-      const finalImpactScore = isNaN(impactScore) ? 0 : impactScore;
-
-      // Transform the data to match our existing interface
-      const formattedRequests: InfluencerRequest[] = orderRequests.map(request => {
-        const influencerData = request.influencer_profiles;
-        const firstName = influencerData?.user_profiles?.first_name || '';
-        const lastName = influencerData?.user_profiles?.last_name || '';
-        
-        return {
-          id: request.id,
-          businessId: request.business_id || user.id,
-          businessName: 'Your Business',  // We could fetch this if needed
-          influencerId: request.influencer_id,
-          influencerName: `${firstName} ${lastName}`.trim(),
-          influencerImage: influencerData?.user_profiles?.profile_image_url || 'https://picsum.photos/200/200',
-          serviceType: request.service_type as ServiceType,
-          platform: request.platform,
-          price: request.price,
-          currency: request.currency,
-          status: request.status as RequestStatus,
-          createdAt: new Date(request.created_at).toISOString(),
-          updatedAt: new Date(request.updated_at).toISOString(),
-          description: request.description
-        };
-      });
-
-      // Update state with fetched data
-      setRequests(formattedRequests);
       setDashboardData({
-        totalSpent: totalSpentValue,
-        completedCampaigns: completedCount,
-        totalReach: totalReachValue,
-        activeRequests: activeRequestsCount,
-        totalOrders: totalOrdersCount,
-        connectedInfluencers: connectedInfluencersCount,
-        impactScore: finalImpactScore,
-        postStats: postTypes
+        totalSpent: data.total_spent || 0,
+        completedCampaigns: data.completed_campaigns || 0,
+        totalReach: data.total_reach || 0,
+        activeRequests: data.active_requests || 0,
+        totalOrders: data.total_orders || 0,
+        connectedInfluencers: data.connected_users || 0,
+        impactScore: parseInt(data.campaign_impact_score?.split('/')[0] || '0'),
+        postStats: {
+          total: data.total_posts || 0,
+          reels: data.reels || 0,
+          videos: data.videos || 0,
+          shorts: data.stories || 0
+        }
       });
-
-      // Set up realtime subscription for order requests
-      const channel = supabase
-        .channel('business-dashboard-changes')
-        .on('postgres_changes', {
-          event: '*',
-          schema: 'public',
-          table: 'order_requests',
-          filter: `business_id=eq.${user.id}`
-        }, payload => {
-          // Refresh data when changes occur
-          fetchDashboardData();
-
-          // Show notification
-          if (payload.new && 'status' in payload.new && payload.old && 'status' in payload.old && payload.new.status !== payload.old.status) {
-            toast(`Order status updated to: ${payload.new.status}`, {
-              description: `Your order has been ${payload.new.status}`,
-              duration: 5000
-            });
-          }
-        })
-        .subscribe();
-
-      // Also listen for notifications
-      supabase
-        .channel('business-notifications')
-        .on('postgres_changes', {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'notifications',
-          filter: `user_id=eq.${user.id}`
-        }, payload => {
-          if (payload.new && typeof payload.new === 'object') {
-            toast(payload.new.title as string || 'New notification', {
-              description: payload.new.message as string || '',
-              duration: 5000
-            });
-          }
-        })
-        .subscribe();
-
-      return () => {
-        supabase.removeChannel(channel);
-      };
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
       toast.error('Failed to fetch dashboard data. Please try again.');

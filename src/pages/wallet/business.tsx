@@ -1,230 +1,134 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowUp, ArrowDown, Clock, Filter, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { formatCurrency, formatDate, getStatusColor, getTimeDifference } from "@/lib/wallet-utils";
+import { formatCurrency, formatDate, getTimeDifference } from "@/lib/wallet-utils";
 import { toast } from "@/components/ui/use-toast";
 import Sidebar from "@/components/layout/Sidebar";
 import ConditionalHeader from "@/components/layout/ConditionalHeader";
-import { supabase } from "@/integrations/supabase/client";
-
-type Transaction = {
-  id: string;
-  amount: number;
-  transaction_type: string;
-  description: string;
-  created_at: string;
-  balance_after: number;
-  metadata: any;
-};
+import { getWallet, getWalletTransactions, createWalletOrder, verifyWalletPayment } from '@/lib/wallet-api';
 
 const BusinessWalletPage = () => {
-  const [balance, setBalance] = useState(0);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [addAmount, setAddAmount] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [isAddingFunds, setIsAddingFunds] = useState(false);
-  const [totalSpent, setTotalSpent] = useState(0);
-  const [totalWithdrawn, setTotalWithdrawn] = useState(0);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const queryClient = useQueryClient();
 
-  // Add dummy data for demonstration
-  const dummyTransactions: Transaction[] = [
-    {
-      id: '1',
-      amount: 5000,
-      transaction_type: 'deposit',
-      description: 'Added funds to wallet',
-      created_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-      balance_after: 5000,
-      metadata: {}
-    },
-    {
-      id: '2',
-      amount: 1500,
-      transaction_type: 'order_payment',
-      description: 'Payment for Instagram promotion by @influencer_john',
-      created_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
-      balance_after: 3500,
-      metadata: {}
-    },
-    {
-      id: '3',
-      amount: 500,
-      transaction_type: 'refund',
-      description: 'Refund for cancelled order #ORD-2024-001',
-      created_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-      balance_after: 4000,
-      metadata: {}
-    },
-    {
-      id: '4',
-      amount: 2000,
-      transaction_type: 'deposit',
-      description: 'Added funds via UPI',
-      created_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
-      balance_after: 6000,
-      metadata: {}
-    },
-    {
-      id: '5',
-      amount: 800,
-      transaction_type: 'order_payment',
-      description: 'Payment for YouTube video promotion',
-      created_at: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
-      balance_after: 5200,
-      metadata: {}
-    },
-    {
-      id: '6',
-      amount: 300,
-      transaction_type: 'adjustment',
-      description: 'Referral bonus from @sarah_marketing',
-      created_at: new Date(Date.now() - 12 * 24 * 60 * 60 * 1000).toISOString(),
-      balance_after: 5500,
-      metadata: { type: 'referral_bonus' }
-    },
-    {
-      id: '7',
-      amount: 250,
-      transaction_type: 'adjustment',
-      description: 'Sign-up bonus',
-      created_at: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString(),
-      balance_after: 5750,
-      metadata: { type: 'signup_bonus' }
-    }
-  ];
+  const { data: wallet, isLoading: walletLoading } = useQuery({
+    queryKey: ['wallet'],
+    queryFn: getWallet,
+    refetchOnWindowFocus: false
+  });
 
-  useEffect(() => {
-    // Use dummy data for demonstration
-    setTransactions(dummyTransactions);
-    setBalance(3500);
-    setTotalSpent(2300);
-    setTotalWithdrawn(0);
-    setIsLoading(false);
-    // fetchWalletData();
-  }, []);
+  const { data: transactions = [], isLoading: transactionsLoading } = useQuery({
+    queryKey: ['wallet-transactions'],
+    queryFn: () => getWalletTransactions('all'),
+    refetchOnWindowFocus: false
+  });
 
-  const fetchWalletData = async () => {
-    setIsLoading(true);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      if (user) {
-        // Fetch wallet data
-        const { data: walletData, error: walletError } = await supabase
-          .from('wallets')
-          .select('*')
-          .eq('user_id', user.id)
-          .single();
-
-        if (walletError) throw walletError;
-
-        setBalance(walletData?.current_balance || 0);
-        setTotalWithdrawn(walletData?.total_withdrawn || 0);
-
-        // Fetch transactions
-        const { data: transactionsData, error: transactionsError } = await supabase
-          .from('wallet_transactions')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false });
-
-        if (transactionsError) throw transactionsError;
-
-        setTransactions(transactionsData || []);
-
-        // Calculate total spent
-        const spent = transactionsData
-          ?.filter(t => t.transaction_type === 'order_payment')
-          .reduce((sum, t) => sum + t.amount, 0) || 0;
-          
-        setTotalSpent(spent);
-      }
-    } catch (error) {
-      console.error('Error fetching wallet data:', error);
+  const verifyPaymentMutation = useMutation({
+    mutationFn: verifyWalletPayment,
+    onSuccess: () => {
+      setIsProcessing(false);
+      queryClient.invalidateQueries({ queryKey: ['wallet'] });
+      queryClient.invalidateQueries({ queryKey: ['wallet-transactions'] });
       toast({
-        title: "Error",
-        description: "Failed to fetch wallet data. Please try again.",
+        title: "Success",
+        description: "Funds added to wallet successfully.",
+      });
+      setAddAmount("");
+    },
+    onError: (error: any) => {
+      setIsProcessing(false);
+      toast({
+        title: "Payment Failed",
+        description: error.message || "Failed to add funds",
         variant: "destructive",
       });
-    } finally {
-      setIsLoading(false);
     }
-  };
+  });
+
+  const balance = wallet?.balance || 0;
+  const isLoading = walletLoading || transactionsLoading;
+
+  const totalSpent = transactions
+    .filter(t => t.transaction_type === 'payment' || t.transaction_type === 'debit')
+    .reduce((sum, t) => sum + Math.abs(parseFloat(t.amount)), 0);
+
+  const totalDeposited = transactions
+    .filter(t => t.transaction_type === 'deposit')
+    .reduce((sum, t) => sum + parseFloat(t.amount), 0);
 
   const handleAddFunds = async () => {
     if (!addAmount || isNaN(Number(addAmount)) || Number(addAmount) <= 0) {
       toast({
         title: "Invalid Amount",
-        description: "Please enter a valid amount to add to your wallet.",
+        description: "Please enter a valid amount.",
         variant: "destructive",
       });
       return;
     }
 
-    setIsAddingFunds(true);
+    setIsProcessing(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const orderData = await createWalletOrder(Number(addAmount));
       
-      if (user) {
-        // In a real implementation, this would call a Supabase Edge Function
-        // that handles the payment gateway integration and then updates the wallet
-        
-        // For demo purposes, directly add funds
-        const { data, error } = await supabase.functions.invoke('add-funds', {
-          body: { amount: Number(addAmount) }
-        });
+      const options = {
+        key: orderData.key,
+        amount: orderData.amount,
+        currency: orderData.currency,
+        order_id: orderData.orderId,
+        name: "InfluexKonnect",
+        description: "Add funds to wallet",
+        handler: async (response: any) => {
+          verifyPaymentMutation.mutate({
+            razorpay_order_id: response.razorpay_order_id,
+            razorpay_payment_id: response.razorpay_payment_id,
+            razorpay_signature: response.razorpay_signature,
+            amount: orderData.amount
+          });
+        },
+        modal: {
+          ondismiss: () => {
+            setIsProcessing(false);
+          }
+        },
+        theme: {
+          color: "#3399cc"
+        }
+      };
 
-        if (error) throw error;
-
-        toast({
-          title: "Funds Added",
-          description: `₹${addAmount} has been added to your wallet successfully.`,
-        });
-
-        setAddAmount("");
-        fetchWalletData();
-      }
-    } catch (error) {
-      console.error('Error adding funds:', error);
+      const razorpay = new (window as any).Razorpay(options);
+      razorpay.open();
+    } catch (error: any) {
+      setIsProcessing(false);
       toast({
-        title: "Transaction Failed",
-        description: "Failed to add funds to your wallet. Please try again.",
+        title: "Error",
+        description: error.message || "Failed to initiate payment",
         variant: "destructive",
       });
-    } finally {
-      setIsAddingFunds(false);
     }
   };
 
   const getTransactionIcon = (type: string) => {
-    switch (type) {
-      case 'deposit':
-      case 'order_earning':
-      case 'refund':
-        return <ArrowUp className="w-5 h-5 text-green-500" />;
-      case 'withdrawal':
-      case 'order_payment':
-        return <ArrowDown className="w-5 h-5 text-red-500" />;
-      default:
-        return <Clock className="w-5 h-5 text-gray-500" />;
+    if (type === 'deposit' || type === 'refund') {
+      return <ArrowUp className="w-5 h-5 text-green-500" />;
+    } else if (type === 'payment' || type === 'debit') {
+      return <ArrowDown className="w-5 h-5 text-red-500" />;
     }
+    return <Clock className="w-5 h-5 text-gray-500" />;
   };
 
   const getTransactionColor = (type: string) => {
-    switch (type) {
-      case 'deposit':
-      case 'order_earning':
-      case 'refund':
-        return 'text-green-600';
-      case 'withdrawal':
-      case 'order_payment':
-        return 'text-red-600';
-      default:
-        return 'text-gray-600';
-    }
+    if (type === 'deposit' || type === 'refund') return 'text-green-600';
+    if (type === 'payment' || type === 'debit') return 'text-red-600';
+    return 'text-gray-600';
+  };
+
+  const getTransactionSign = (type: string) => {
+    return (type === 'deposit' || type === 'refund') ? '+' : '-';
   };
 
   return (
@@ -253,11 +157,11 @@ const BusinessWalletPage = () => {
                       className="w-full"
                     />
                     <Button 
-                      onClick={handleAddFunds} 
-                      disabled={isAddingFunds}
+                      onClick={handleAddFunds}
+                      disabled={isProcessing}
                       className="whitespace-nowrap"
                     >
-                      Add Funds
+                      {isProcessing ? 'Processing...' : 'Add Funds'}
                     </Button>
                   </div>
                 </div>
@@ -272,10 +176,10 @@ const BusinessWalletPage = () => {
               </Card>
 
               <Card className="p-6 shadow-sm">
-                <h3 className="text-sm font-medium text-muted-foreground">Total Withdrawn</h3>
-                <p className="text-3xl font-bold mt-1">{formatCurrency(totalWithdrawn)}</p>
+                <h3 className="text-sm font-medium text-muted-foreground">Total Deposited</h3>
+                <p className="text-3xl font-bold mt-1">{formatCurrency(totalDeposited)}</p>
                 <p className="text-sm text-muted-foreground mt-4">
-                  Including refunds and adjustments
+                  Total funds added to wallet
                 </p>
               </Card>
             </div>
@@ -289,7 +193,6 @@ const BusinessWalletPage = () => {
                     <TabsTrigger value="deposits">Deposits</TabsTrigger>
                     <TabsTrigger value="payments">Payments</TabsTrigger>
                     <TabsTrigger value="refunds">Refunds</TabsTrigger>
-                    <TabsTrigger value="bonus">Bonus</TabsTrigger>
                   </TabsList>
                   <div>
                     <Button variant="outline" size="sm" className="ml-auto">
@@ -327,14 +230,11 @@ const BusinessWalletPage = () => {
                             </div>
                             <div className="text-right">
                               <p className={`font-bold ${getTransactionColor(transaction.transaction_type)}`}>
-                                {transaction.transaction_type === 'deposit' || 
-                                  transaction.transaction_type === 'refund' || 
-                                  transaction.transaction_type === 'order_earning' 
-                                  ? '+' : '-'}
-                                {formatCurrency(transaction.amount)}
+                                {getTransactionSign(transaction.transaction_type)}
+                                {formatCurrency(Math.abs(parseFloat(transaction.amount)))}
                               </p>
                               <p className="text-xs text-muted-foreground">
-                                Balance: {formatCurrency(transaction.balance_after)}
+                                {formatDate(transaction.created_at)}
                               </p>
                             </div>
                           </div>
@@ -373,10 +273,10 @@ const BusinessWalletPage = () => {
                               </div>
                               <div className="text-right">
                                 <p className="font-bold text-green-600">
-                                  +{formatCurrency(transaction.amount)}
+                                  +{formatCurrency(Math.abs(parseFloat(transaction.amount)))}
                                 </p>
                                 <p className="text-xs text-muted-foreground">
-                                  Balance: {formatCurrency(transaction.balance_after)}
+                                  {formatDate(transaction.created_at)}
                                 </p>
                               </div>
                             </div>
@@ -392,13 +292,13 @@ const BusinessWalletPage = () => {
                       <div className="flex justify-center items-center p-8">
                         <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary"></div>
                       </div>
-                    ) : transactions.filter(t => t.transaction_type === 'order_payment').length === 0 ? (
+                    ) : transactions.filter(t => t.transaction_type === 'payment' || t.transaction_type === 'debit').length === 0 ? (
                       <div className="text-center py-8 text-muted-foreground">
                         No payments found.
                       </div>
                     ) : (
                       transactions
-                        .filter(t => t.transaction_type === 'order_payment')
+                        .filter(t => t.transaction_type === 'payment' || t.transaction_type === 'debit')
                         .map((transaction) => (
                           <div key={transaction.id} className="p-4 hover:bg-accent">
                             <div className="flex items-center justify-between">
@@ -415,10 +315,10 @@ const BusinessWalletPage = () => {
                               </div>
                               <div className="text-right">
                                 <p className="font-bold text-red-600">
-                                  -{formatCurrency(transaction.amount)}
+                                  -{formatCurrency(Math.abs(parseFloat(transaction.amount)))}
                                 </p>
                                 <p className="text-xs text-muted-foreground">
-                                  Balance: {formatCurrency(transaction.balance_after)}
+                                  {formatDate(transaction.created_at)}
                                 </p>
                               </div>
                             </div>
@@ -457,52 +357,10 @@ const BusinessWalletPage = () => {
                               </div>
                               <div className="text-right">
                                 <p className="font-bold text-green-600">
-                                  +{formatCurrency(transaction.amount)}
+                                  +{formatCurrency(Math.abs(parseFloat(transaction.amount)))}
                                 </p>
                                 <p className="text-xs text-muted-foreground">
-                                  Balance: {formatCurrency(transaction.balance_after)}
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        ))
-                    )}
-                  </div>
-                </TabsContent>
-
-                <TabsContent value="bonus" className="p-0">
-                  <div className="divide-y">
-                    {isLoading ? (
-                      <div className="flex justify-center items-center p-8">
-                        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary"></div>
-                      </div>
-                    ) : transactions.filter(t => t.transaction_type === 'adjustment').length === 0 ? (
-                      <div className="text-center py-8 text-muted-foreground">
-                        No bonus transactions found.
-                      </div>
-                    ) : (
-                      transactions
-                        .filter(t => t.transaction_type === 'adjustment')
-                        .map((transaction) => (
-                          <div key={transaction.id} className="p-4 hover:bg-accent">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center">
-                                <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center mr-3">
-                                  <ArrowUp className="w-5 h-5 text-green-500" />
-                                </div>
-                                <div>
-                                  <p className="font-medium">{transaction.description}</p>
-                                  <p className="text-xs text-muted-foreground">
-                                    {getTimeDifference(transaction.created_at)} • {formatDate(transaction.created_at)}
-                                  </p>
-                                </div>
-                              </div>
-                              <div className="text-right">
-                                <p className="font-bold text-green-600">
-                                  +{formatCurrency(transaction.amount)}
-                                </p>
-                                <p className="text-xs text-muted-foreground">
-                                  Balance: {formatCurrency(transaction.balance_after)}
+                                  {formatDate(transaction.created_at)}
                                 </p>
                               </div>
                             </div>

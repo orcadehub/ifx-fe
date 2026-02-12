@@ -1,6 +1,8 @@
 
-import React from 'react';
-import { BadgeCheck, Heart } from 'lucide-react';
+import React, { useState } from 'react';
+import { Heart } from 'lucide-react';
+import { toggleInfluencerWishlist } from '@/lib/influencers-api';
+import { toast } from 'sonner';
 
 interface FollowerData {
   platform: string;
@@ -14,6 +16,8 @@ interface InfluencerData {
   category: string;
   location: string;
   followers: FollowerData[];
+  id?: string;
+  wishlist?: boolean;
 }
 
 interface InfluencerProfileCardProps {
@@ -21,6 +25,24 @@ interface InfluencerProfileCardProps {
 }
 
 const InfluencerProfileCard: React.FC<InfluencerProfileCardProps> = ({ influencer }) => {
+  const [isWishlisted, setIsWishlisted] = useState(influencer.wishlist || false);
+  const [isToggling, setIsToggling] = useState(false);
+
+  const handleWishlistToggle = async () => {
+    if (!influencer.id || isToggling) return;
+    
+    setIsToggling(true);
+    try {
+      await toggleInfluencerWishlist(influencer.id, isWishlisted);
+      setIsWishlisted(!isWishlisted);
+      toast.success(isWishlisted ? 'Removed from wishlist' : 'Added to wishlist');
+    } catch (error) {
+      console.error('Error toggling wishlist:', error);
+      toast.error('Failed to update wishlist');
+    } finally {
+      setIsToggling(false);
+    }
+  };
   return (
     <div className="rounded-xl overflow-hidden border-0 shadow-md bg-white dark:bg-card">
       <div className="p-0">
@@ -36,8 +58,12 @@ const InfluencerProfileCard: React.FC<InfluencerProfileCardProps> = ({ influence
           <div className="flex flex-col flex-1">
             <div className="flex items-center gap-2">
               <h3 className="text-lg font-semibold">{influencer.name}</h3>
-              <BadgeCheck className="w-5 h-5 text-blue-400" fill="currentColor" />
-              <Heart className="w-5 h-5 text-white/80 hover:text-red-400 cursor-pointer hover:scale-110 transition-all" />
+              <Heart 
+                className={`w-5 h-5 cursor-pointer hover:scale-110 transition-all ${
+                  isWishlisted ? 'text-red-500 fill-red-500' : 'text-white/80 hover:text-red-400'
+                }`}
+                onClick={handleWishlistToggle}
+              />
             </div>
             <p className="text-sm text-white/90">{influencer.category} • {influencer.location}</p>
           </div>

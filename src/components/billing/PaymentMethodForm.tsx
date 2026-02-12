@@ -40,13 +40,15 @@ interface PaymentMethodFormProps {
     expirationDate: string;
   };
   isEdit?: boolean;
+  isLoading?: boolean;
   onSubmit: (data: CardFormData) => void;
   onCancel: () => void;
 }
 
 export const PaymentMethodForm = ({ 
   defaultValues, 
-  isEdit = false, 
+  isEdit = false,
+  isLoading = false, 
   onSubmit, 
   onCancel 
 }: PaymentMethodFormProps) => {
@@ -159,10 +161,10 @@ export const PaymentMethodForm = ({
         </div>
 
         <div className="flex gap-3 pt-4">
-          <Button type="submit" className="flex-1">
-            {isEdit ? "Save Changes" : "Add Card"}
+          <Button type="submit" className="flex-1" disabled={isLoading}>
+            {isLoading ? 'Adding...' : isEdit ? "Save Changes" : "Add Card"}
           </Button>
-          <Button type="button" variant="outline" className="flex-1" onClick={onCancel}>
+          <Button type="button" variant="outline" className="flex-1" onClick={onCancel} disabled={isLoading}>
             Cancel
           </Button>
         </div>

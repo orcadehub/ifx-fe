@@ -1,11 +1,11 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import apiClient from '@/lib/api-client';
 import Sidebar from '@/components/layout/Sidebar';
-import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Share, MessageSquare, Instagram, Facebook, Youtube, Twitter } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { supabase } from '@/integrations/supabase/client';
 import BusinessDetails from '@/components/profile/BusinessDetails';
 import BusinessServicesTab from '@/components/profile/BusinessServicesTab';
 import BusinessDataTab from '@/components/profile/BusinessDataTab';
@@ -14,117 +14,56 @@ import BusinessEditModal from '@/components/profile/BusinessEditModal';
 
 const BusinessProfile = () => {
   const navigate = useNavigate();
-  const [user, setUser] = React.useState<any>(null);
-  const [loading, setLoading] = React.useState(true);
-  const [isRegistered, setIsRegistered] = React.useState(true);
-  const [businessData, setBusinessData] = React.useState<any>(null);
   const [isEditing, setIsEditing] = React.useState(false);
+  const userId = localStorage.getItem('userId');
+
+  const { data: profileData, isLoading, refetch } = useQuery({
+    queryKey: ['business-profile', userId],
+    queryFn: async () => {
+      const response = await apiClient.get('/dashboard/user-profile');
+      return response.data;
+    },
+    enabled: !!userId
+  });
+
+  const { data: galleryData } = useQuery({
+    queryKey: ['user-gallery', userId],
+    queryFn: async () => {
+      const response = await apiClient.get(`/dashboard/gallery/${userId}`);
+      return response.data;
+    },
+    enabled: !!userId
+  });
+
+  const user = profileData?.user;
+  const profile = profileData?.profile || {};
 
   const handleEdit = () => {
     setIsEditing(true);
   };
 
   const handleSave = async (updatedData: any) => {
-    if (!user?.id) return;
-
-    setLoading(true);
-    const { error } = await supabase
-      .from('business_profiles')
-      .update({
-        company_name: updatedData.businessName,
-        industry: [updatedData.category],
-        website: updatedData.website,
-      })
-      .eq('id', user.id);
-
-    if (error) {
-      console.error('Error updating business profile:', error);
-      // TODO: Show a toast notification for error
-    } else {
-      // Update the local state with the new data immediately for UI consistency
-      setBusinessData(updatedData);
-      setIsRegistered(updatedData.isRegistered);
-      // The following fields are not directly supported by the current business_profiles schema.
-      // To persist these, the Supabase table schema would need to be updated:
-      // updatedData.serviceType
-      // updatedData.location
-      // updatedData.priceRange
-      // updatedData.accountManagement
-      // A full re-fetch might still be needed if other data dependencies exist
-      // await fetchBusinessData(user.id); // Uncomment if a full re-fetch is desired
+    try {
+      await apiClient.put('/dashboard/update-profile', updatedData);
+      refetch();
+      setIsEditing(false);
+    } catch (error) {
+      console.error('Error updating profile:', error);
     }
-    setIsEditing(false);
-    setLoading(false);
   };
 
   const handleCancel = () => {
     setIsEditing(false);
   };
 
-  const fetchBusinessData = async (userId: string) => {
-    const { data: businessProfile, error } = await supabase
-      .from('business_profiles')
-      .select('company_name, industry, website')
-      .eq('id', userId)
-      .single();
-
-    if (error && error.code !== 'PGRST116') {
-      console.error('Error fetching business profile:', error);
-      setIsRegistered(false);
-    } else if (businessProfile) {
-      setBusinessData({
-        businessName: businessProfile.company_name || "",
-        category: businessProfile.industry ? businessProfile.industry[0] : '',
-        website: businessProfile.website || "",
-        isRegistered: true,
-        serviceType: "Online & Offline",
-        location: "[Address]",
-        priceRange: "₹5,000 - ₹50,000",
-        accountManagement: "Select",
-      });
-      setIsRegistered(true);
-    } else {
-      setIsRegistered(false);
-      setBusinessData({
-        businessName: "ABC company",
-        category: "XYZ Products",
-        website: "www.xyz.com",
-        isRegistered: false,
-        serviceType: "Online & Offline",
-        location: "[Address]",
-        priceRange: "₹5,000 - ₹50,000",
-        accountManagement: "Select",
-      });
-    }
-  };
-
   React.useEffect(() => {
-    const checkUser = async () => {
-      const { data } = await supabase.auth.getSession();
-      if (!data.session) {
-        navigate('/signin');
-        return;
-      }
-      
-      const currentUserType = localStorage.getItem('userType');
-      if (!currentUserType || currentUserType !== 'business') {
-        navigate(`/account/${currentUserType || 'influencer'}`);
-        return;
-      }
-      
-      setUser(data.session.user);
+    const userType = localStorage.getItem('userType');
+    if (!userId || userType !== 'business') {
+      navigate('/signin');
+    }
+  }, [navigate, userId]);
 
-      if (data.session.user?.id) {
-        await fetchBusinessData(data.session.user.id);
-      }
-
-      setLoading(false);
-    };
-
-    checkUser();
-  }, [navigate, user?.id]);
-
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex h-screen bg-background">
         <Sidebar />
@@ -149,7 +88,7 @@ const BusinessProfile = () => {
               <div className="absolute left-6 -bottom-12">
                 <div className="rounded-full border-4 border-background overflow-hidden h-24 w-24 bg-background">
                   <img 
-                    src="https://images.unsplash.com/photo-1568602471122-7832951cc4c5?ixlib=rb-1.2.1&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" 
+                    src={user?.profile_pic || 'https://images.unsplash.com/photo-1568602471122-7832951cc4c5?ixlib=rb-1.2.1&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80'}
                     alt="Profile"
                     className="h-full w-full object-cover"
                   />
@@ -168,7 +107,7 @@ const BusinessProfile = () => {
             <div className="pt-16 px-4 pb-6">
               <div className="flex items-start justify-between">
                 <div>
-                  <h1 className="text-2xl font-bold text-foreground">{user?.email?.split('@')[0] || 'Username'}</h1>
+                  <h1 className="text-2xl font-bold text-foreground">{user?.fullname || 'Username'}</h1>
                   <p className="text-muted-foreground">{user?.email || 'username@gmail.com'}</p>
                 </div>
                 
@@ -191,12 +130,12 @@ const BusinessProfile = () => {
               <div className="mt-6 flex flex-col md:flex-row gap-4">
                 <div className="md:w-1/3 flex-shrink-0">
                   <BusinessDetails 
-                    businessName={businessData?.businessName || "ABC company"}
-                    category={businessData?.category || "XYZ Products"}
-                    serviceType={businessData?.serviceType || "Online & Offline"}
-                    website={businessData?.website || "www.xyz.com"}
-                    location={businessData?.location || "[Address]"}
-                    isRegistered={businessData?.isRegistered ?? false}
+                    businessName={profile?.company_name || "ABC company"}
+                    category={profile?.industry || "XYZ Products"}
+                    serviceType={profile?.service_type || "Online & Offline"}
+                    website={profile?.website || "www.xyz.com"}
+                    location={profile?.location || "[Address]"}
+                    isRegistered={!!profile?.company_name}
                     onEdit={handleEdit}
                   />
                 </div>
@@ -220,7 +159,11 @@ const BusinessProfile = () => {
                     </TabsContent>
                     
                     <TabsContent value="gallery" className="mt-0">
-                      <BusinessGalleryTab />
+                      <BusinessGalleryTab 
+                        gallery={galleryData?.gallery || []} 
+                        isOwnProfile={true}
+                        userId={userId}
+                      />
                     </TabsContent>
                   </Tabs>
                 </div>
@@ -229,12 +172,18 @@ const BusinessProfile = () => {
           </div>
         </div>
       </div>
-      {isEditing && businessData && (
+      {isEditing && (
         <BusinessEditModal 
           isOpen={isEditing}
           onClose={handleCancel}
           onSave={handleSave}
-          initialData={businessData}
+          initialData={{
+            company_name: profile?.company_name,
+            industry: profile?.industry,
+            website: profile?.website,
+            service_type: profile?.service_type,
+            location: profile?.location
+          }}
         />
       )}
     </div>

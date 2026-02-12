@@ -1,8 +1,8 @@
 
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
+import apiClient from '@/lib/api-client';
 
 type UserType = 'business' | 'influencer' | 'admin';
 
@@ -28,47 +28,34 @@ export const useAuth = () => {
     setIsLoading(true);
     
     try {
-      // Sign in with Supabase
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const { data } = await apiClient.post('/login', {
         email,
         password,
       });
       
-      if (error) {
-        throw error;
+      if (!data.success) {
+        throw new Error(data.message || 'Login failed');
       }
       
-      // Store the user type in localStorage
-      localStorage.setItem('userType', userType);
+      // Store auth token and user data
+      localStorage.setItem('authToken', data.token);
+      localStorage.setItem('userType', data.user.role);
+      localStorage.setItem('userId', data.user.id);
+      localStorage.setItem('userData', JSON.stringify(data.user));
       
-      // Store login details in the database
-      const { error: loginDetailsError } = await supabase
-        .from('login_details')
-        .insert({
-          user_id: data.user.id,
-          login_type: userType,
-          login_method: 'email',
-          ip_address: 'client-side', // We don't have access to real IP on client
-          user_agent: navigator.userAgent
-        });
+      console.log('Stored userId:', data.user.id);
       
-      if (loginDetailsError) {
-        console.error('Error storing login details:', loginDetailsError);
-      }
-      
-      // Show success message
       toast({
         title: "Signed in successfully!",
-        description: `Welcome back to InfluenceConnect as ${userType}.`,
+        description: `Welcome back to InfluenceConnect as ${data.user.role}.`,
       });
       
-      // Redirect to the appropriate dashboard
-      navigate(`/dashboard/${userType}`);
+      navigate(`/dashboard/${data.user.role}`);
     } catch (error: any) {
       console.error('Sign in error:', error);
       toast({
         title: "Sign in failed",
-        description: error.message || "Please check your credentials and try again.",
+        description: error.response?.data?.message || error.message || "Please check your credentials and try again.",
         variant: "destructive",
       });
     } finally {

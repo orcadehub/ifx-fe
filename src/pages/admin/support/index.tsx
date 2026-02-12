@@ -15,17 +15,16 @@ import TicketDetail from "@/components/support/TicketDetail";
 import CreateTicketDialog from "@/components/support/CreateTicketDialog";
 import { Ticket, TicketStatus, TicketPriority, UserType, TicketCategory } from "@/types/ticket";
 import { toast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
-import { FileSpreadsheet, Plus, Ticket as TicketIcon } from "lucide-react";
+import { FileSpreadsheet, Plus } from "lucide-react";
 
-// Mock team members - in a real app, fetch from the database
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+
 const teamMembers = [
   { id: "team1", name: "John Smith" },
   { id: "team2", name: "Sarah Johnson" },
   { id: "team3", name: "Mike Thompson" },
 ];
 
-// Mock users - in a real app, fetch from the database
 const mockUsers = [
   { id: "user1", name: "John Doe", type: "business" as UserType },
   { id: "user2", name: "Jane Smith", type: "influencer" as UserType },
@@ -39,109 +38,58 @@ const AdminSupportPage = () => {
   const [loading, setLoading] = useState(true);
   const [isCreateTicketOpen, setIsCreateTicketOpen] = useState(false);
   
-  // In a real app, fetch tickets from the database
   useEffect(() => {
-    // This would be replaced with actual fetch from Supabase
-    const fetchTickets = async () => {
-      setLoading(true);
-      try {
-        // Example of how to fetch tickets from Supabase
-        // const { data, error } = await supabase
-        //   .from('tickets')
-        //   .select('*')
-        //   .order('created_at', { ascending: false });
-        
-        // if (error) throw error;
-        // setTickets(data);
-        
-        // Using mock data for now
-        const mockTickets: Ticket[] = [
-          {
-            id: "T1001",
-            userId: "user1",
-            userName: "John Doe",
-            userType: "business",
-            subject: "Payment processing issue",
-            category: "Payment",
-            priority: "High",
-            status: "New",
-            createdAt: new Date().toISOString(),
-            lastUpdated: new Date().toISOString(),
-            messages: [
-              {
-                id: "m1",
-                ticketId: "T1001",
-                userId: "user1",
-                userName: "John Doe",
-                userType: "business",
-                message: "I'm having trouble processing a payment. The transaction fails every time.",
-                createdAt: new Date().toISOString(),
-                isInternal: false,
-              },
-            ],
-          },
-          {
-            id: "T1002",
-            userId: "user2",
-            userName: "Jane Smith",
-            userType: "influencer",
-            subject: "Account verification",
-            category: "Account Issue",
-            priority: "Medium",
-            status: "In Progress",
-            createdAt: new Date(Date.now() - 86400000).toISOString(),
-            lastUpdated: new Date(Date.now() - 43200000).toISOString(),
-            assignedTo: "team1",
-            messages: [
-              {
-                id: "m2",
-                ticketId: "T1002",
-                userId: "user2",
-                userName: "Jane Smith",
-                userType: "influencer",
-                message: "I uploaded my verification documents yesterday but haven't received any updates.",
-                createdAt: new Date(Date.now() - 86400000).toISOString(),
-                isInternal: false,
-              },
-              {
-                id: "m3",
-                ticketId: "T1002",
-                userId: "admin1",
-                userName: "John Smith",
-                userType: "admin",
-                message: "I'm checking your documents now. Will update you shortly.",
-                createdAt: new Date(Date.now() - 43200000).toISOString(),
-                isInternal: false,
-              },
-              {
-                id: "m4",
-                ticketId: "T1002",
-                userId: "admin1",
-                userName: "John Smith",
-                userType: "admin",
-                message: "Documents look blurry. Need to request clearer ones.",
-                createdAt: new Date(Date.now() - 43000000).toISOString(),
-                isInternal: true,
-              },
-            ],
-          },
-        ];
-        
-        setTickets(mockTickets);
-      } catch (error) {
-        console.error("Error fetching tickets:", error);
-        toast({
-          title: "Error",
-          description: "Failed to load support tickets",
-          variant: "destructive",
-        });
-      } finally {
-        setLoading(false);
-      }
-    };
-    
     fetchTickets();
   }, []);
+  
+  const fetchTickets = async () => {
+    setLoading(true);
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_URL}/tickets/all`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      const data = await response.json();
+      if (data.success) {
+        const formattedTickets = data.tickets.map((t: any) => ({
+          id: t.id,
+          userId: t.user_id.toString(),
+          userName: t.user_name,
+          userType: t.user_type,
+          subject: t.subject,
+          category: t.category,
+          priority: t.priority,
+          status: t.status,
+          createdAt: t.created_at,
+          lastUpdated: t.updated_at,
+          messages: [{
+            id: `m${t.id}`,
+            ticketId: t.id,
+            userId: t.user_id.toString(),
+            userName: t.user_name,
+            userType: t.user_type,
+            message: t.message,
+            createdAt: t.created_at,
+            isInternal: false,
+            attachments: t.attachments
+          }]
+        }));
+        setTickets(formattedTickets);
+      }
+    } catch (error) {
+      console.error("Error fetching tickets:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load support tickets",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
   
   const handleViewTicket = (ticketId: string) => {
     const ticket = tickets.find((t) => t.id === ticketId);
@@ -157,61 +105,24 @@ const AdminSupportPage = () => {
     attachments: File[]
   ) => {
     try {
-      // In a real app, upload attachments to storage and save message to database
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_URL}/tickets/${ticketId}/message`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ message, attachments: attachments.length ? attachments.map(f => ({ name: f.name, type: f.type })) : null })
+      });
       
-      // Example only: Create a new message object with correct UserType
-      const newMessage = {
-        id: `m${Math.random().toString(36).substring(7)}`,
-        ticketId,
-        userId: "admin1",
-        userName: "Admin User",
-        userType: "admin" as UserType,  // Explicitly cast to UserType
-        message,
-        createdAt: new Date().toISOString(),
-        isInternal,
-        attachments: attachments.length
-          ? attachments.map((file) => ({
-              name: file.name,
-              url: URL.createObjectURL(file),
-              type: file.type,
-            }))
-          : undefined,
-      };
-      
-      // Update the ticket in state with proper typing
-      setTickets((prevTickets) =>
-        prevTickets.map((ticket) => {
-          if (ticket.id === ticketId) {
-            return {
-              ...ticket,
-              messages: [...ticket.messages, newMessage],
-              lastUpdated: new Date().toISOString(),
-            };
-          }
-          return ticket;
-        })
-      );
-      
-      // If the selected ticket is the one being updated, update it too
-      if (selectedTicket?.id === ticketId) {
-        setSelectedTicket((prev) => {
-          if (prev) {
-            return {
-              ...prev,
-              messages: [...prev.messages, newMessage],
-              lastUpdated: new Date().toISOString(),
-            };
-          }
-          return prev;
+      const data = await response.json();
+      if (data.success) {
+        await fetchTickets();
+        toast({
+          title: "Reply sent",
+          description: isInternal ? "Internal note added successfully" : "Reply sent successfully",
         });
       }
-      
-      toast({
-        title: "Reply sent",
-        description: isInternal
-          ? "Internal note added successfully"
-          : "Reply sent successfully",
-      });
     } catch (error) {
       console.error("Error sending reply:", error);
       toast({
@@ -222,43 +133,37 @@ const AdminSupportPage = () => {
     }
   };
   
-  const handleStatusChange = (ticketId: string, status: TicketStatus) => {
-    // In a real app, update the status in the database
-    setTickets((prevTickets) =>
-      prevTickets.map((ticket) => {
-        if (ticket.id === ticketId) {
-          return {
-            ...ticket,
-            status,
-            lastUpdated: new Date().toISOString(),
-          };
-        }
-        return ticket;
-      })
-    );
-    
-    // Update selected ticket if it's the one being changed
-    if (selectedTicket?.id === ticketId) {
-      setSelectedTicket((prev) => {
-        if (prev) {
-          return {
-            ...prev,
-            status,
-            lastUpdated: new Date().toISOString(),
-          };
-        }
-        return prev;
+  const handleStatusChange = async (ticketId: string, status: TicketStatus) => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_URL}/tickets/${ticketId}/status`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ status })
+      });
+      
+      const data = await response.json();
+      if (data.success) {
+        await fetchTickets();
+        toast({
+          title: "Status updated",
+          description: `Ticket status changed to ${status}`,
+        });
+      }
+    } catch (error) {
+      console.error("Error updating status:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update status",
+        variant: "destructive",
       });
     }
-    
-    toast({
-      title: "Status updated",
-      description: `Ticket status changed to ${status}`,
-    });
   };
   
   const handleAssigneeChange = (ticketId: string, assigneeId: string) => {
-    // In a real app, update the assignee in the database
     setTickets((prevTickets) =>
       prevTickets.map((ticket) => {
         if (ticket.id === ticketId) {
@@ -272,7 +177,6 @@ const AdminSupportPage = () => {
       })
     );
     
-    // Update selected ticket if it's the one being changed
     if (selectedTicket?.id === ticketId) {
       setSelectedTicket((prev) => {
         if (prev) {
@@ -296,39 +200,34 @@ const AdminSupportPage = () => {
     });
   };
   
-  const handlePriorityChange = (ticketId: string, priority: TicketPriority) => {
-    // In a real app, update the priority in the database
-    setTickets((prevTickets) =>
-      prevTickets.map((ticket) => {
-        if (ticket.id === ticketId) {
-          return {
-            ...ticket,
-            priority,
-            lastUpdated: new Date().toISOString(),
-          };
-        }
-        return ticket;
-      })
-    );
-    
-    // Update selected ticket if it's the one being changed
-    if (selectedTicket?.id === ticketId) {
-      setSelectedTicket((prev) => {
-        if (prev) {
-          return {
-            ...prev,
-            priority,
-            lastUpdated: new Date().toISOString(),
-          };
-        }
-        return prev;
+  const handlePriorityChange = async (ticketId: string, priority: TicketPriority) => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_URL}/tickets/${ticketId}/priority`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ priority })
+      });
+      
+      const data = await response.json();
+      if (data.success) {
+        await fetchTickets();
+        toast({
+          title: "Priority updated",
+          description: `Ticket priority changed to ${priority}`,
+        });
+      }
+    } catch (error) {
+      console.error("Error updating priority:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update priority",
+        variant: "destructive",
       });
     }
-    
-    toast({
-      title: "Priority updated",
-      description: `Ticket priority changed to ${priority}`,
-    });
   };
   
   const handleCreateTicket = async (
@@ -342,50 +241,30 @@ const AdminSupportPage = () => {
     attachments: File[]
   ) => {
     try {
-      // In a real app, upload attachments to storage and save ticket to database
-      
-      const ticketId = `T${Math.floor(1000 + Math.random() * 9000)}`;
-      
-      // Create a new ticket
-      const newTicket: Ticket = {
-        id: ticketId,
-        userId,
-        userName,
-        userType,
-        subject,
-        category,
-        priority,
-        status: "New",
-        createdAt: new Date().toISOString(),
-        lastUpdated: new Date().toISOString(),
-        messages: [
-          {
-            id: `m${Math.random().toString(36).substring(7)}`,
-            ticketId,
-            userId,
-            userName,
-            userType,
-            message,
-            createdAt: new Date().toISOString(),
-            isInternal: false,
-            attachments: attachments.length
-              ? attachments.map((file) => ({
-                  name: file.name,
-                  url: URL.createObjectURL(file),
-                  type: file.type,
-                }))
-              : undefined,
-          },
-        ],
-      };
-      
-      // Add the new ticket to the state
-      setTickets((prevTickets) => [newTicket, ...prevTickets]);
-      
-      toast({
-        title: "Ticket created",
-        description: "Support ticket has been created successfully",
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_URL}/tickets/create`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          subject,
+          category,
+          priority,
+          message,
+          attachments: attachments.length ? attachments.map(f => ({ name: f.name, type: f.type })) : null
+        })
       });
+      
+      const data = await response.json();
+      if (data.success) {
+        await fetchTickets();
+        toast({
+          title: "Ticket created",
+          description: "Support ticket has been created successfully",
+        });
+      }
     } catch (error) {
       console.error("Error creating ticket:", error);
       toast({

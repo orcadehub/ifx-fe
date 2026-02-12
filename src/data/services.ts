@@ -2,32 +2,32 @@ import { ServiceCategoryType, ServiceType } from '@/types/service';
 
 export const services: ServiceType[] = [
   // Designers Category
-  { id: '1', name: 'Posts', icon: '📱', category: 'designers' },
-  { id: '2', name: 'Reels/Shorts', icon: '🎬', category: 'designers' },
-  { id: '3', name: 'Logo Design', icon: '🍃', category: 'designers' },
-  { id: '4', name: 'Logo Animation', icon: '💰', category: 'designers' },
+  { id: '1', name: 'Posts', icon: 'FileImage', category: 'designers' },
+  { id: '2', name: 'Reels/Shorts', icon: 'Video', category: 'designers' },
+  { id: '3', name: 'Logo Design', icon: 'Leaf', category: 'designers' },
+  { id: '4', name: 'Logo Animation', icon: 'DollarSign', category: 'designers' },
   
   // Marketing Category
-  { id: '5', name: 'Pay per click', icon: '🖱️', category: 'marketing' },
-  { id: '6', name: 'SEO Ranking', icon: '🔍', category: 'marketing' },
-  { id: '7', name: 'Google Analytics', icon: '📊', category: 'marketing' },
-  { id: '8', name: 'Google Business', icon: '📈', category: 'marketing' },
+  { id: '5', name: 'Pay per click', icon: 'MousePointer', category: 'marketing' },
+  { id: '6', name: 'SEO Ranking', icon: 'Search', category: 'marketing' },
+  { id: '7', name: 'Google Analytics', icon: 'BarChart3', category: 'marketing' },
+  { id: '8', name: 'Google Business', icon: 'TrendingUp', category: 'marketing' },
   
   // Social Media Category
-  { id: '9', name: 'Google Ads', icon: 'G', category: 'social' },
-  { id: '10', name: 'Instagram', icon: '📸', category: 'social' },
-  { id: '11', name: 'Facebook', icon: 'f', category: 'social' },
-  { id: '12', name: 'Youtube', icon: '▶️', category: 'social' },
-  { id: '13', name: 'LinkedIn', icon: 'in', category: 'social' },
-  { id: '14', name: 'Pinterest', icon: 'P', category: 'social' },
-  { id: '15', name: 'Snapchat', icon: '👻', category: 'social' },
-  { id: '16', name: 'Twitter', icon: '🐦', category: 'social' },
+  { id: '9', name: 'Google Ads', icon: 'Search', category: 'social' },
+  { id: '10', name: 'Instagram', icon: 'Instagram', category: 'social' },
+  { id: '11', name: 'Facebook', icon: 'Facebook', category: 'social' },
+  { id: '12', name: 'Youtube', icon: 'Youtube', category: 'social' },
+  { id: '13', name: 'LinkedIn', icon: 'Linkedin', category: 'social' },
+  { id: '14', name: 'Pinterest', icon: 'FileImage', category: 'social' },
+  { id: '15', name: 'Snapchat', icon: 'Video', category: 'social' },
+  { id: '16', name: 'Twitter', icon: 'Twitter', category: 'social' },
   
   // OTT Category
-  { id: '17', name: 'Hotstar', icon: 'H', category: 'ott' },
-  { id: '18', name: 'Amazon', icon: 'A', category: 'ott' },
-  { id: '19', name: 'Jio', icon: 'J', category: 'ott' },
-  { id: '20', name: 'Zee5', icon: 'Z', category: 'ott' },
+  { id: '17', name: 'Hotstar', icon: 'Video', category: 'ott' },
+  { id: '18', name: 'Amazon', icon: 'Video', category: 'ott' },
+  { id: '19', name: 'Jio', icon: 'Video', category: 'ott' },
+  { id: '20', name: 'Zee5', icon: 'Video', category: 'ott' },
 ];
 
 export const serviceCategories: ServiceCategoryType[] = [

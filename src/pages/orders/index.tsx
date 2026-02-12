@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { format, parse, isAfter, isBefore, parseISO } from 'date-fns';
-import { supabase } from '@/integrations/supabase/client';
 import { Order, OrderStatus, OrderContentType, SocialMediaLinks } from '@/types/order';
-import { orderData } from '@/data/orders';
+import { getOrders, updateOrder } from '@/lib/orders-api';
+import { getUserServiceRequests } from '@/lib/services-api';
 import Sidebar from '@/components/layout/Sidebar';
 import Header from '@/components/layout/Header';
 import { useToast } from '@/hooks/use-toast';
@@ -42,12 +42,14 @@ const STATUS_OPTIONS = [
 const OrdersPage = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<'pending' | 'completed'>('pending');
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isModifyMode, setIsModifyMode] = useState(false);
   const [modifyPrice, setModifyPrice] = useState('');
   const [modifyDate, setModifyDate] = useState('');
+  const [modifyTime, setModifyTime] = useState('');
   const [socialMediaLinks, setSocialMediaLinks] = useState<SocialMediaLinks>({});
   
   // Filter states
@@ -57,42 +59,80 @@ const OrdersPage = () => {
   const [orderTypeFilter, setOrderTypeFilter] = useState<string>('');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
 
-  const { data: apiOrders, isLoading } = useQuery({
+  const { data: orders = [], isLoading, error } = useQuery({
     queryKey: ['orders'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('orders')
-        .select('*')
-        .order('created_at', { ascending: false });
+      try {
+        const [ordersData, servicesData] = await Promise.all([
+          getOrders(),
+          getUserServiceRequests()
+        ]);
+        
+        const transformedOrders: Order[] = ordersData.map((item: any) => ({
+          id: item.id,
+          orderNumber: item.order_id,
+          date: item.created_at,
+          url: '',
+          status: item.status === 'pending payment' ? 'pending_checkout' : item.status === 'completed' ? 'completed' : 'pending_checkout',
+          scheduledDate: item.post_datetime ? format(new Date(item.post_datetime), 'yyyy-MM-dd') : '',
+          scheduledTime: item.post_datetime ? format(new Date(item.post_datetime), 'HH:mm') : '',
+          category: item.order_type || '',
+          productService: item.content_type || '',
+          orderType: item.order_type || 'post',
+          businessVerified: false,
+          username: item.order_direction === 'sent' ? item.influencer_user_name : item.user_fullname,
+          amount: parseFloat(item.display_amount) || 0,
+          createdAt: item.created_at,
+          updatedAt: item.updated_at
+        }));
 
-      if (error) {
-        throw error;
+        const transformedServices: Order[] = servicesData.map((item: any) => ({
+          id: `service-${item.id}`,
+          orderNumber: item.id,
+          date: item.created_at,
+          url: '',
+          status: item.status === 'pending' ? 'pending_checkout' : 'completed',
+          scheduledDate: '',
+          scheduledTime: '',
+          category: 'Service',
+          productService: item.service_title,
+          orderType: 'service',
+          businessVerified: false,
+          username: item.full_name,
+          amount: parseFloat(item.budget) || 0,
+          createdAt: item.created_at,
+          updatedAt: item.updated_at
+        }));
+
+        return [...transformedOrders, ...transformedServices];
+      } catch (err) {
+        console.error('Failed to fetch orders:', err);
+        return [];
       }
-
-      const transformedData: Order[] = data.map((item: any) => ({
-        id: item.id,
-        orderNumber: item.order_number,
-        date: item.date,
-        url: item.url,
-        status: item.status as OrderStatus,
-        scheduledDate: item.scheduled_date,
-        scheduledTime: item.scheduled_time,
-        category: item.category,
-        productService: item.product_service,
-        orderType: item.order_type || 'post',
-        businessVerified: item.business_verified,
-        username: item.username,
-        amount: item.amount,
-        createdAt: item.created_at,
-        updatedAt: item.updated_at
-      }));
-
-      return transformedData;
     },
     refetchOnWindowFocus: false
   });
 
-  const orders = (apiOrders && apiOrders.length > 0) ? apiOrders : orderData;
+  const updateOrderMutation = useMutation({
+    mutationFn: ({ orderId, updateData }: { orderId: number; updateData: any }) => 
+      updateOrder(orderId, updateData),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      toast({
+        title: "Order Modified",
+        description: "Order details have been updated successfully.",
+      });
+      setIsModifyMode(false);
+      setIsDetailOpen(false);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Update Failed",
+        description: error.message || "Failed to update order",
+        variant: "destructive",
+      });
+    }
+  });
 
   const filteredOrders = React.useMemo(() => {
     let filtered = [...orders];
@@ -158,6 +198,9 @@ const OrdersPage = () => {
   };
 
   const handleViewDetails = (order: Order) => {
+    if (order.orderType === 'service') {
+      return;
+    }
     setSelectedOrder(order);
     setSocialMediaLinks(order.socialMediaLinks || {});
     setIsDetailOpen(true);
@@ -174,7 +217,7 @@ const OrdersPage = () => {
     try {
       return format(new Date(dateStr), 'MMM dd, yyyy, HH:mm');
     } catch (e) {
-      return dateStr || 'N/A';
+      return dateStr || '-';
     }
   };
 
@@ -297,33 +340,28 @@ const OrdersPage = () => {
     if (selectedOrder) {
       setModifyPrice(selectedOrder.amount?.toString() || '');
       setModifyDate(selectedOrder.scheduledDate || '');
+      setModifyTime(selectedOrder.scheduledTime || '');
     }
   };
 
   const handleSaveModification = () => {
     if (!selectedOrder) return;
     
-    const updatedOrder = {
-      ...selectedOrder,
-      amount: parseFloat(modifyPrice) || selectedOrder.amount,
-      scheduledDate: modifyDate || selectedOrder.scheduledDate,
-      socialMediaLinks: socialMediaLinks
-    };
-    
-    setSelectedOrder(updatedOrder);
-    
-    toast({
-      title: "Order Modified",
-      description: "Order details have been updated successfully.",
+    updateOrderMutation.mutate({
+      orderId: selectedOrder.id as number,
+      updateData: {
+        scheduledDate: modifyDate,
+        scheduledTime: modifyTime,
+        socialLinks: socialMediaLinks
+      }
     });
-    setIsModifyMode(false);
-    setIsDetailOpen(false);
   };
 
   const handleCancelModification = () => {
     setIsModifyMode(false);
     setModifyPrice('');
     setModifyDate('');
+    setModifyTime('');
   };
   
   const isValidUrl = (url: string): boolean => {
@@ -480,11 +518,11 @@ const OrdersPage = () => {
                             >
                               <TableCell>{order.username}</TableCell>
                               <TableCell>{formatDateTime(order.createdAt)}</TableCell>
-                              <TableCell>{order.scheduledDate || 'N/A'}</TableCell>
-                              <TableCell>{order.scheduledTime || 'N/A'}</TableCell>
+                              <TableCell>{order.scheduledDate || '-'}</TableCell>
+                              <TableCell>{order.scheduledTime || '-'}</TableCell>
                               <TableCell>{order.orderType || 'Post'}</TableCell>
-                              <TableCell>{order.category || 'N/A'}</TableCell>
-                              <TableCell>{order.productService || 'N/A'}</TableCell>
+                              <TableCell>{order.category || '-'}</TableCell>
+                              <TableCell>{order.productService || '-'}</TableCell>
                               <TableCell>₹{order.amount || 0}</TableCell>
                               <TableCell>
                                 <Badge variant={getStatusBadgeVariant(order.status)}>
@@ -560,11 +598,11 @@ const OrdersPage = () => {
                             >
                               <TableCell>{order.username}</TableCell>
                               <TableCell>{formatDateTime(order.createdAt)}</TableCell>
-                              <TableCell>{order.scheduledDate || 'N/A'}</TableCell>
-                              <TableCell>{order.scheduledTime || 'N/A'}</TableCell>
+                              <TableCell>{order.scheduledDate || '-'}</TableCell>
+                              <TableCell>{order.scheduledTime || '-'}</TableCell>
                               <TableCell>{order.orderType || 'Post'}</TableCell>
-                              <TableCell>{order.category || 'N/A'}</TableCell>
-                              <TableCell>{order.productService || 'N/A'}</TableCell>
+                              <TableCell>{order.category || '-'}</TableCell>
+                              <TableCell>{order.productService || '-'}</TableCell>
                               <TableCell>₹{order.amount || 0}</TableCell>
                               <TableCell>
                                 <Badge variant="success">Completed</Badge>
@@ -642,20 +680,7 @@ const OrdersPage = () => {
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="font-medium">Amount:</span>
-                      {isModifyMode ? (
-                        <div className="flex items-center gap-2">
-                          <span>₹</span>
-                          <Input
-                            type="number"
-                            value={modifyPrice}
-                            onChange={(e) => setModifyPrice(e.target.value)}
-                            className="w-20 h-8"
-                            min="0"
-                          />
-                        </div>
-                      ) : (
-                        <span className="font-semibold text-lg">₹{selectedOrder.amount || 0}</span>
-                      )}
+                      <span className="font-semibold text-lg">₹{selectedOrder.amount || 0}</span>
                     </div>
                   </CardContent>
                 </Card>
@@ -673,22 +698,32 @@ const OrdersPage = () => {
                           value={modifyDate}
                           onChange={(e) => setModifyDate(e.target.value)}
                           className="w-32 h-8"
+                          min={format(new Date(), 'yyyy-MM-dd')}
                         />
                       ) : (
                         <span>{selectedOrder.scheduledDate || 'Not scheduled'}</span>
                       )}
                     </div>
-                    <div className="flex justify-between">
+                    <div className="flex justify-between items-center">
                       <span className="font-medium">Scheduled Time:</span>
-                      <span>{selectedOrder.scheduledTime || 'Not set'}</span>
+                      {isModifyMode ? (
+                        <Input
+                          type="time"
+                          value={modifyTime}
+                          onChange={(e) => setModifyTime(e.target.value)}
+                          className="w-32 h-8"
+                        />
+                      ) : (
+                        <span>{selectedOrder.scheduledTime || 'Not set'}</span>
+                      )}
                     </div>
                     <div className="flex justify-between">
                       <span className="font-medium">Category:</span>
-                      <span>{selectedOrder.category || 'N/A'}</span>
+                      <span>{selectedOrder.category || '-'}</span>
                     </div>
                     <div>
                       <span className="font-medium">Product/Service:</span>
-                      <p className="text-sm mt-1 text-muted-foreground">{selectedOrder.productService || 'N/A'}</p>
+                      <p className="text-sm mt-1 text-muted-foreground">{selectedOrder.productService || '-'}</p>
                     </div>
                   </CardContent>
                 </Card>
@@ -699,180 +734,20 @@ const OrdersPage = () => {
                 const dummyContent = getDummyContent(selectedOrder);
                 const contentType = dummyContent?.type;
                 
-                if (!dummyContent || !contentType) return null;
-
-                return (
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="text-lg flex items-center gap-2">
-                        {getContentTypeIcon(contentType)}
-                        {getContentTypeLabel(contentType)}
-                        <Badge variant="outline" className="ml-2 text-xs">
-                          {contentType.replace('_', ' ').toUpperCase()}
-                        </Badge>
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      {/* Upload Files Content */}
-                      {contentType === 'upload_files' && dummyContent.files && (
-                        <div className="space-y-4">
-                          <div className="flex items-center gap-2">
-                            <Upload className="h-4 w-4 text-muted-foreground" />
-                            <p className="text-sm font-medium text-muted-foreground">Uploaded Files</p>
-                            <Button variant="outline" size="sm" className="ml-auto text-xs">
-                              UPLOAD FILES
-                            </Button>
-                          </div>
-                          
-                          <div className="text-sm text-muted-foreground mb-3">
-                            Uploaded Media & Documents:
-                          </div>
-                          
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            {dummyContent.files.map((file) => (
-                              <div key={file.id} className="relative bg-accent/30 rounded-lg p-4 border border-border hover:bg-accent/50 transition-colors">
-                                <div className="flex items-start justify-between">
-                                  <div className="flex items-center gap-3 flex-1">
-                                    <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-                                      {file.type.startsWith('image/') ? (
-                                        <Upload className="h-6 w-6 text-primary" />
-                                      ) : file.name.toLowerCase().includes('.pdf') ? (
-                                        <FileText className="h-6 w-6 text-red-500" />
-                                      ) : (
-                                        <FileText className="h-6 w-6 text-blue-500" />
-                                      )}
-                                    </div>
-                                    <div className="min-w-0 flex-1">
-                                      <p className="font-medium text-sm truncate">{file.name}</p>
-                                      <p className="text-xs text-muted-foreground">{file.size}</p>
-                                    </div>
-                                  </div>
-                                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0 flex-shrink-0">
-                                    <Download className="h-4 w-4" />
-                                  </Button>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Provided Content */}
-                      {contentType === 'provided_content' && dummyContent.description && (
-                        <div className="space-y-3">
-                          <p className="text-sm text-muted-foreground">Content Brief:</p>
-                          <div className="p-4 bg-muted rounded-lg">
-                            <p className="text-sm leading-relaxed">{dummyContent.description}</p>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Polls Content */}
-                      {contentType === 'polls' && dummyContent.polls && (
-                        <div className="space-y-4">
-                          <p className="text-sm text-muted-foreground">Poll Questions for Twitter:</p>
-                          {dummyContent.polls.map((poll, index) => (
-                            <div key={poll.id} className="p-4 bg-muted rounded-lg space-y-3">
-                              <div className="flex items-center gap-2">
-                                <Badge variant="secondary" className="text-xs">Poll {index + 1}</Badge>
-                                <p className="font-medium">{poll.question}</p>
-                              </div>
-                              <div className="grid grid-cols-2 gap-2">
-                                {poll.options.map((option, optIndex) => (
-                                  <div key={optIndex} className="flex items-center gap-2 p-2 bg-background rounded border">
-                                    <div className="w-2 h-2 bg-primary rounded-full"></div>
-                                    <span className="text-sm">{option}</span>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      {/* Visit & Promote Content */}
-                      {contentType === 'visit_promote' && dummyContent.visitDetails && (
-                        <div className="space-y-4">
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {dummyContent.visitDetails.preferredDates && (
-                              <div>
-                                <p className="text-sm font-medium text-muted-foreground mb-2">Preferred Dates:</p>
-                                <div className="space-y-1">
-                                  {dummyContent.visitDetails.preferredDates.map((date, index) => (
-                                    <div key={index} className="flex items-center gap-2 text-sm">
-                                      <Calendar className="h-4 w-4 text-muted-foreground" />
-                                      <span>{format(new Date(date), 'MMM dd, yyyy')}</span>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                            
-                            {dummyContent.visitDetails.timeSlot && (
-                              <div>
-                                <p className="text-sm font-medium text-muted-foreground mb-2">Time Slot:</p>
-                                <div className="flex items-center gap-2 text-sm">
-                                  <Clock className="h-4 w-4 text-muted-foreground" />
-                                  <span>{dummyContent.visitDetails.timeSlot}</span>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-
-                          {dummyContent.visitDetails.location && (
-                            <div>
-                              <p className="text-sm font-medium text-muted-foreground mb-2">Location:</p>
-                              <div className="flex items-start gap-2 p-3 bg-background rounded border">
-                                <MapPin className="h-4 w-4 text-muted-foreground mt-0.5" />
-                                <span className="text-sm">{dummyContent.visitDetails.location}</span>
-                              </div>
-                            </div>
-                          )}
-
-                          {dummyContent.visitDetails.offers && (
-                            <div>
-                              <p className="text-sm font-medium text-muted-foreground mb-2">Offers Included:</p>
-                              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
-                                {dummyContent.visitDetails.offers.food && (
-                                  <Badge variant="outline" className="justify-center">🍽️ Food</Badge>
-                                )}
-                                {dummyContent.visitDetails.offers.travel && (
-                                  <Badge variant="outline" className="justify-center">✈️ Travel</Badge>
-                                )}
-                                {dummyContent.visitDetails.offers.stay && (
-                                  <Badge variant="outline" className="justify-center">🏨 Stay</Badge>
-                                )}
-                              </div>
-                              {dummyContent.visitDetails.offers.other && dummyContent.visitDetails.offers.other.length > 0 && (
-                                <div>
-                                  <p className="text-xs text-muted-foreground mb-1">Additional Offers:</p>
-                                  <div className="space-y-1">
-                                    {dummyContent.visitDetails.offers.other.map((offer, index) => (
-                                      <div key={index} className="text-sm p-2 bg-background rounded border">
-                                        • {offer}
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                );
+                // Don't show this section at all
+                return null;
               })()}
 
-              {/* Social Media Links Section */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Social Media Links</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <p className="text-sm text-muted-foreground mb-4">
-                    Add URLs to the social media posts for this order
-                  </p>
+              {/* Social Media Links Section - Only for completed orders */}
+              {selectedOrder.status === 'completed' && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">Social Media Links</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Add URLs to the social media posts for this order
+                    </p>
                   
                   {/* Instagram */}
                   <div className="flex items-center gap-3">
@@ -1075,6 +950,7 @@ const OrdersPage = () => {
                   </div>
                 </CardContent>
               </Card>
+              )}
 
               {/* Action Buttons */}
               <Card>
@@ -1087,9 +963,18 @@ const OrdersPage = () => {
                             <X className="w-4 h-4 mr-2" />
                             Cancel
                           </Button>
-                          <Button onClick={handleSaveModification}>
-                            <Edit className="w-4 h-4 mr-2" />
-                            Save Changes
+                          <Button onClick={handleSaveModification} disabled={updateOrderMutation.isPending}>
+                            {updateOrderMutation.isPending ? (
+                              <>
+                                <div className="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full mr-2"></div>
+                                Saving...
+                              </>
+                            ) : (
+                              <>
+                                <Edit className="w-4 h-4 mr-2" />
+                                Save Changes
+                              </>
+                            )}
                           </Button>
                         </>
                       ) : (

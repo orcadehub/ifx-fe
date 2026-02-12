@@ -39,7 +39,13 @@ const Index = () => {
   return (
     <Layout>
       <div className="flex items-center justify-center h-full">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+        <div className="flex items-center gap-3">
+          <img src="/Favicon_Logo.png" alt="Loading" className="w-16 h-16 animate-bounce" />
+          <div className="text-4xl font-bold">
+            <span className="text-primary animate-pulse">Influex</span>
+            <span className="text-foreground animate-pulse" style={{ animationDelay: '0.2s' }}>Konnect</span>
+          </div>
+        </div>
       </div>
     </Layout>
   );

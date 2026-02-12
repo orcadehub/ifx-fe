@@ -1,43 +1,26 @@
 
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import { Niche } from '@/types/location';
-import { useToast } from '@/components/ui/use-toast';
+import apiClient from '@/lib/api-client';
 
 export function useNiches() {
-  const [niches, setNiches] = useState<Niche[]>([]);
+  const [niches, setNiches] = useState<string[]>([]);
   const [selectedNiche, setSelectedNiche] = useState<string>('');
-  const [loading, setLoading] = useState<boolean>(true);
-  const { toast } = useToast();
+  const [loading, setLoading] = useState<boolean>(false);
 
   useEffect(() => {
     async function fetchNiches() {
       try {
         setLoading(true);
-        const { data, error } = await supabase
-          .from('niches')
-          .select('*')
-          .order('name');
-        
-        if (error) {
-          throw error;
-        }
-        
-        setNiches(data as Niche[]);
+        const { data } = await apiClient.get('/niches');
+        setNiches(data || []);
       } catch (error) {
         console.error('Error fetching niches:', error);
-        toast({
-          title: 'Error',
-          description: 'Failed to load niches',
-          variant: 'destructive',
-        });
       } finally {
         setLoading(false);
       }
     }
-
     fetchNiches();
-  }, [toast]);
+  }, []);
 
   return {
     niches,

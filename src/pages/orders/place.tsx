@@ -13,6 +13,7 @@ import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { createOrder } from '@/lib/orders-api';
 
 // Import new components
 import InfluencerProfileCard from '@/components/orders/place/InfluencerProfileCard';
@@ -26,6 +27,15 @@ import UploadFilesTab from '@/components/orders/place/UploadFilesTab';
 import ProvideContentTab from '@/components/orders/place/ProvideContentTab';
 import VisitPromoteTab from '@/components/orders/place/VisitPromoteTab';
 import PollContentTab from '@/components/orders/place/PollContentTab';
+
+const formatFollowers = (num: number) => {
+  if (!num || num === 0) return '0';
+  if (num >= 1000000000000) return (num / 1000000000000).toFixed(1).replace(/\.0$/, '') + 'T';
+  if (num >= 1000000000) return (num / 1000000000).toFixed(1).replace(/\.0$/, '') + 'B';
+  if (num >= 1000000) return (num / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+  if (num >= 1000) return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
+  return num.toString();
+};
 
 const influencerMock = {
   avatar: "https://picsum.photos/id/64/100/100",
@@ -122,9 +132,43 @@ export default function PlaceOrderPage() {
   const location = useLocation();
   const navigate = useNavigate();
   
-  // Get order details from navigation state
-  const orderDetails = location.state || {};
-  const { influencerName = "Gary Vaynerchuk", selectedItems = [], isVisitPromote = false } = orderDetails;
+  // Get influencer data from navigation state
+  const influencerData = location.state?.selected || null;
+  
+  // Format influencer data for display
+  const influencer = influencerData ? {
+    id: influencerData.id,
+    wishlist: influencerData.wishlist,
+    avatar: influencerData.profilePic || influencerData.profile_pic || `https://picsum.photos/seed/${influencerData.id}/100`,
+    name: influencerData.name,
+    category: influencerData.category,
+    location: `${influencerData.location_city || ''}, ${influencerData.location_state || ''}`.trim().replace(/^,\s*|,\s*$/g, '') || 'Location not specified',
+    followers: [
+      { platform: "Instagram", icon: <Instagram className="text-social-instagram w-5 h-5" />, value: formatFollowers(influencerData.data?.instagram?.total_followers || 0) },
+      { platform: "Facebook", icon: <Facebook className="text-social-facebook w-5 h-5" />, value: formatFollowers(influencerData.data?.facebook?.total_followers || 0) },
+      { platform: "YouTube", icon: <Youtube className="text-social-youtube w-5 h-5" />, value: formatFollowers(influencerData.data?.youtube?.total_followers || 0) },
+      { platform: "Twitter", icon: <Twitter className="text-social-twitter w-5 h-5" />, value: formatFollowers(influencerData.data?.twitter?.total_followers || 0) },
+    ],
+  } : influencerMock;
+
+  // Get pricing from influencer data
+  const getInfluencerPrice = () => {
+    if (!influencerData?.pricing) return 0;
+    
+    // Try to get price for selected platform and content type
+    const platformPricing = influencerData.pricing[selectedSinglePlatform];
+    if (platformPricing) {
+      // Try to match content type to pricing keys
+      const contentKey = Object.keys(platformPricing).find(key => 
+        key.toLowerCase().includes(selectedContent.toLowerCase().split(' ')[0])
+      );
+      if (contentKey) {
+        const price = platformPricing[contentKey];
+        return Number(String(price).replace(/[^0-9.]/g, '')) || 0;
+      }
+    }
+    return 0;
+  };
   
   const [affiliateLink, setAffiliateLink] = useState("");
   const [affiliateLinkError, setAffiliateLinkError] = useState("");
@@ -160,7 +204,7 @@ export default function PlaceOrderPage() {
   const dynamicHashtags = useMemo(() => generateDynamicHashtags(description), [description]);
   const contextualEmojis = useMemo(() => generateContextualEmojis(description), [description]);
 
-  const packagePrice = 800;
+  const packagePrice = getInfluencerPrice();
   const platformFee = 99;
   
   const couponDiscount = appliedCoupon ? 
@@ -344,7 +388,7 @@ export default function PlaceOrderPage() {
     });
   };
 
-  const handleSendRequest = (e: React.FormEvent) => {
+  const handleSendRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     
     const linkError = validateAffiliateLink(affiliateLink);
@@ -383,26 +427,48 @@ export default function PlaceOrderPage() {
       return;
     }
 
+    if (!influencerData?.id) {
+      toast({
+        title: "Error",
+        description: "Influencer information is missing",
+        variant: "destructive"
+      });
+      return;
+    }
+
     setIsSubmitting(true);
     
-    // Simulate API call
-    setTimeout(() => {
-      setIsSubmitting(false);
-      setShowThankYouDialog(true);
-      
-      console.log({
-        orderType: selectedOrderType,
-        content: selectedContent,
-        platform: selectedSinglePlatform,
-        affiliateLink,
-        description,
-        selectedDateTime: selectedDateTime ? format(selectedDateTime, "PPP p") : undefined,
-        files: files.map((f) => f.name),
-        contentDescription,
-        appliedCoupon,
-        total
+    try {
+      await createOrder({
+        influencerId: influencerData.id,
+        influencer_name: influencerData.name,
+        type: selectedOrderType,
+        services: [{
+          name: selectedContent,
+          platform: selectedSinglePlatform,
+          price: packagePrice
+        }],
+        totalPrice: total,
+        orderAmount: packagePrice,
+        description: activeTab === 'upload-files' ? description : contentDescription,
+        affiliatedLinks: affiliateLink ? [affiliateLink] : [],
+        couponCode: appliedCoupon?.code,
+        postDateTime: selectedDateTime ? format(selectedDateTime, "yyyy-MM-dd'T'HH:mm:ss") : undefined,
+        polls: selectedContent === 'Polls' ? [] : undefined,
+        visitPromotionData: selectedContent === 'Visit & Promote' ? {} : undefined
       });
-    }, 1500);
+      
+      setShowThankYouDialog(true);
+    } catch (error) {
+      console.error('Order creation error:', error);
+      toast({
+        title: "Error",
+        description: "Failed to create order. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -426,7 +492,7 @@ export default function PlaceOrderPage() {
             <div className="flex-1 flex flex-col gap-7">
               {/* Influencer Card - aligned to match height of Date & Time section */}
               <div className="flex flex-col gap-6 min-h-[200px]">
-                <InfluencerProfileCard influencer={influencerMock} />
+                <InfluencerProfileCard influencer={influencer} />
               </div>
               
               <OrderTypeSelector

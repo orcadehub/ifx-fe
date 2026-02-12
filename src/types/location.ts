@@ -36,7 +36,9 @@ export interface Influencer {
   bio?: string;
   image_url?: string;
   avatar_url?: string;
+  profilePic?: string;
   email?: string;
+  category?: string;
   followers_instagram?: number;
   followers_facebook?: number;
   followers_youtube?: number;
@@ -55,6 +57,12 @@ export interface Influencer {
   social_platforms?: { platform_name: string }[];
   is_verified?: boolean;
   is_trending?: boolean;
+  data?: {
+    instagram?: { total_followers: number };
+    facebook?: { total_followers: number };
+    youtube?: { total_followers: number };
+    twitter?: { total_followers: number };
+  };
 }
 
 export interface LocationFilters {

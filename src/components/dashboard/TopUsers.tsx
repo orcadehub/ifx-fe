@@ -44,7 +44,7 @@ const TopUsers: React.FC<TopUsersProps> = ({ users, title, isLoading = false, us
   return (
     <Card className="h-full">
       <CardHeader className="pb-2">
-        <CardTitle className="text-lg font-medium flex items-center">
+        <CardTitle className="text-lg font-medium flex items-center mb-3">
           {userType === 'influencer' ? (
             <User className="mr-2 h-5 w-5 text-primary" />
           ) : (

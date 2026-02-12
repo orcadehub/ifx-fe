@@ -4,12 +4,12 @@ import ContactForm from './ContactForm';
 
 const ContactSection = () => {
   return (
-    <section id="contact" className="py-20 px-6 bg-white">
+    <section id="contact" className="py-20 px-6 bg-background">
       <div className="max-w-7xl mx-auto">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
           <div className="opacity-0 animate-fadeInLeft [animation-delay:200ms]">
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-6 opacity-0 animate-fadeInUp">Get in Touch</h2>
-            <p className="text-xl text-gray-600 mb-8 opacity-0 animate-fadeInUp [animation-delay:100ms]">Have questions about InfluexKonnect? Our team is here to help you find the right solution for your business.</p>
+            <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-6 opacity-0 animate-fadeInUp">Get in Touch</h2>
+            <p className="text-xl text-muted-foreground mb-8 opacity-0 animate-fadeInUp [animation-delay:100ms]">Have questions about InfluexKonnect? Our team is here to help you find the right solution for your business.</p>
             
             <div className="space-y-6">
               <div className="flex items-start space-x-4 opacity-0 animate-fadeInLeft [animation-delay:300ms] transition-all duration-300 hover:scale-105">
@@ -33,7 +33,7 @@ const ContactSection = () => {
                 </div>
                 <div>
                   <h3 className="text-lg font-semibold">Call Us</h3>
-                  <p className="text-gray-600">+1 (555) 123-4567</p>
+                  <p className="text-muted-foreground">+1 (555) 123-4567</p>
                 </div>
               </div>
               
@@ -45,7 +45,7 @@ const ContactSection = () => {
                 </div>
                 <div>
                   <h3 className="text-lg font-semibold">Visit Us</h3>
-                  <p className="text-gray-600">123 Influence Street, Marketing City, 94105</p>
+                  <p className="text-muted-foreground">123 Influence Street, Marketing City, 94105</p>
                 </div>
               </div>
             </div>

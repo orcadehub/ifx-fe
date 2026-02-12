@@ -39,21 +39,21 @@ const Header = () => {
         {(userType === 'business' || userType === 'influencer') && (
           <>
             <button 
-              className="relative cursor-pointer hover:opacity-80 transition-opacity p-2 rounded-lg hover:bg-muted"
+              className="relative cursor-pointer hover:opacity-80 transition-opacity p-2 rounded-lg hover:bg-accent"
               onClick={navigateToOffers}
               title="Offers"
             >
               <Gift className="w-5 h-5 text-primary" />
             </button>
             <button 
-              className="relative cursor-pointer hover:opacity-80 transition-opacity p-2 rounded-lg hover:bg-muted"
+              className="relative cursor-pointer hover:opacity-80 transition-opacity p-2 rounded-lg hover:bg-accent"
               onClick={navigateToWishlist}
               title="Wishlist"
             >
               <Heart className="w-5 h-5 text-primary" />
             </button>
             <button 
-              className="relative cursor-pointer hover:opacity-80 transition-opacity p-2 rounded-lg hover:bg-muted"
+              className="relative cursor-pointer hover:opacity-80 transition-opacity p-2 rounded-lg hover:bg-accent"
               onClick={navigateToWallet}
               title="Wallet"
             >

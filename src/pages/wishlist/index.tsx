@@ -7,99 +7,46 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Heart, Instagram, Facebook, Youtube, Twitter, Search } from 'lucide-react';
 import { Avatar } from '@/components/ui/avatar';
-import { Influencer } from '@/types/location';
+import { fetchWishlist } from '@/lib/influencers-api';
 
 const WishlistPage = () => {
   const navigate = useNavigate();
-  const [wishlistInfluencers, setWishlistInfluencers] = useState<Influencer[]>([]);
+  const [wishlistInfluencers, setWishlistInfluencers] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Load wishlist from localStorage
-    const savedWishlist = localStorage.getItem('influencerWishlist');
-    if (savedWishlist) {
-      setWishlistInfluencers(JSON.parse(savedWishlist));
-    }
+    loadWishlist();
   }, []);
 
-  const removeFromWishlist = (influencerId: string) => {
-    const updatedWishlist = wishlistInfluencers.filter(inf => inf.id !== influencerId);
-    setWishlistInfluencers(updatedWishlist);
-    localStorage.setItem('influencerWishlist', JSON.stringify(updatedWishlist));
+  const loadWishlist = async () => {
+    setIsLoading(true);
+    try {
+      const data = await fetchWishlist();
+      setWishlistInfluencers(data);
+    } catch (error) {
+      console.error('Error loading wishlist:', error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const formatNumber = (num: number): string => {
-    if (num >= 1000000) {
-      return (num / 1000000).toFixed(1) + 'M';
-    }
-    if (num >= 1000) {
-      return (num / 1000).toFixed(1) + 'K';
-    }
+    if (!num || num === 0) return '0';
+    if (num >= 1000000000000) return (num / 1000000000000).toFixed(1).replace(/\.0$/, '') + 'T';
+    if (num >= 1000000000) return (num / 1000000000).toFixed(1).replace(/\.0$/, '') + 'B';
+    if (num >= 1000000) return (num / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+    if (num >= 1000) return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
     return num.toString();
   };
 
-  const getSocialMediaPageName = (influencer: Influencer) => {
-    if (influencer.followers_instagram && influencer.followers_instagram > 0) {
-      return `@${influencer.name.toLowerCase().replace(/\s+/g, '_')}`;
-    }
-    if (influencer.followers_facebook && influencer.followers_facebook > 0) {
-      return `${influencer.name.replace(/\s+/g, '_')} on Facebook`;
-    }
-    if (influencer.followers_youtube && influencer.followers_youtube > 0) {
-      return `${influencer.name.replace(/\s+/g, '_')} YouTube`;
-    }
-    if (influencer.followers_twitter && influencer.followers_twitter > 0) {
-      return `@${influencer.name.toLowerCase().replace(/\s+/g, '_')}`;
-    }
-    return `@${influencer.name.toLowerCase().replace(/\s+/g, '_')}`;
+  const handleInfluencerClick = (influencer: any) => {
+    navigate(`/influencers/simple/${influencer.id}`);
   };
 
-  const getSocialMediaIcons = (influencer: Influencer) => {
-    const socialMedia = [];
-    
-    if (influencer.followers_instagram && influencer.followers_instagram > 0) {
-      socialMedia.push({
-        icon: <Instagram className="h-3 w-3" />,
-        count: influencer.followers_instagram,
-        color: 'text-pink-500'
-      });
-    }
-    
-    if (influencer.followers_youtube && influencer.followers_youtube > 0) {
-      socialMedia.push({
-        icon: <Youtube className="h-3 w-3" />,
-        count: influencer.followers_youtube,
-        color: 'text-red-500'
-      });
-    }
-    
-    if (influencer.followers_facebook && influencer.followers_facebook > 0) {
-      socialMedia.push({
-        icon: <Facebook className="h-3 w-3" />,
-        count: influencer.followers_facebook,
-        color: 'text-blue-500'
-      });
-    }
-    
-    if (influencer.followers_twitter && influencer.followers_twitter > 0) {
-      socialMedia.push({
-        icon: <Twitter className="h-3 w-3" />,
-        count: influencer.followers_twitter,
-        color: 'text-blue-400'
-      });
-    }
-    
-    return socialMedia;
-  };
-
-  const handleInfluencerClick = (influencer: Influencer) => {
-    navigate('/influencers', { state: { selectedInfluencer: influencer } });
-  };
-
-  // Filter influencers based on search query
   const filteredInfluencers = wishlistInfluencers.filter(influencer =>
-    influencer.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (influencer.niche && influencer.niche.name.toLowerCase().includes(searchQuery.toLowerCase()))
+    influencer.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    influencer.category?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
@@ -128,7 +75,11 @@ const WishlistPage = () => {
             </div>
           </div>
 
-          {wishlistInfluencers.length === 0 ? (
+          {isLoading ? (
+            <div className="flex justify-center items-center h-64">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+            </div>
+          ) : wishlistInfluencers.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-64 text-center">
               <Heart className="h-16 w-16 text-muted-foreground mb-4" />
               <h3 className="text-xl font-medium text-muted-foreground mb-2">No Influencers in Wishlist</h3>
@@ -154,45 +105,46 @@ const WishlistPage = () => {
                   <div className="relative mb-3">
                     <Avatar className="h-16 w-16 mx-auto">
                       <img 
-                        src={influencer.image_url || 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=200'} 
+                        src={influencer.profilePic || 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=200'} 
                         alt={influencer.name} 
-                        className={`h-full w-full object-cover ${influencer.is_blurred ? 'blur-sm' : ''}`}
+                        className="h-full w-full object-cover"
                       />
                     </Avatar>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="absolute -top-1 -right-1 h-6 w-6 bg-red-500 hover:bg-red-600 text-white rounded-full"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        removeFromWishlist(influencer.id);
-                      }}
-                    >
-                      <Heart className="h-3 w-3 fill-current" />
-                    </Button>
                   </div>
                   
                   <div className="text-center">
                     <h3 className="font-medium text-sm text-foreground mb-1 truncate">
-                      {getSocialMediaPageName(influencer)}
+                      {influencer.name}
                     </h3>
-                    {influencer.niche && (
-                      <p className="text-xs text-muted-foreground mb-3 truncate">
-                        {influencer.niche.name}
-                      </p>
-                    )}
+                    <p className="text-xs text-muted-foreground mb-3 truncate">
+                      {influencer.category}
+                    </p>
                     
                     <div className="flex flex-wrap justify-center gap-2">
-                      {getSocialMediaIcons(influencer).map((social, index) => (
-                        <div key={index} className="flex items-center gap-1">
-                          <span className={social.color}>
-                            {social.icon}
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            {formatNumber(social.count)}
-                          </span>
-                        </div>
-                      ))}
+                      <div className="flex items-center gap-1">
+                        <Instagram className="h-3 w-3 text-pink-500" />
+                        <span className="text-xs text-muted-foreground">
+                          {formatNumber(influencer.data?.instagram?.total_followers || 0)}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Facebook className="h-3 w-3 text-blue-500" />
+                        <span className="text-xs text-muted-foreground">
+                          {formatNumber(influencer.data?.facebook?.total_followers || 0)}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Youtube className="h-3 w-3 text-red-500" />
+                        <span className="text-xs text-muted-foreground">
+                          {formatNumber(influencer.data?.youtube?.total_followers || 0)}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Twitter className="h-3 w-3 text-blue-400" />
+                        <span className="text-xs text-muted-foreground">
+                          {formatNumber(influencer.data?.twitter?.total_followers || 0)}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>

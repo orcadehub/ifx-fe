@@ -9,9 +9,9 @@ interface DataTabContentProps {
 }
 
 const MetricCard = ({ value, label }: { value: number | string; label: string }) => (
-  <div className="bg-gray-100 rounded-lg p-4 flex flex-col items-center">
-    <span className="text-3xl font-medium">{value}</span>
-    <span className="text-sm text-gray-600 mt-1">{label}</span>
+  <div className="bg-muted rounded-lg p-4 flex flex-col items-center">
+    <span className="text-3xl font-medium text-foreground">{value}</span>
+    <span className="text-sm text-muted-foreground mt-1">{label}</span>
   </div>
 );
 
@@ -147,10 +147,10 @@ const DataTabContent: React.FC<DataTabContentProps> = ({ influencerId }) => {
                   <stop offset="95%" stopColor="#4F46E5" stopOpacity={0.1}/>
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} />
-              <XAxis dataKey="date" />
-              <YAxis />
-              <Tooltip />
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+              <XAxis dataKey="date" stroke="hsl(var(--muted-foreground))" />
+              <YAxis stroke="hsl(var(--muted-foreground))" />
+              <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', color: 'hsl(var(--foreground))' }} />
               <Area 
                 type="monotone" 
                 dataKey="value" 
@@ -184,7 +184,7 @@ const DataTabContent: React.FC<DataTabContentProps> = ({ influencerId }) => {
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>
-                <Tooltip />
+                <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', color: 'hsl(var(--foreground))' }} />
               </PieChart>
             </ResponsiveContainer>
           </div>
@@ -197,10 +197,10 @@ const DataTabContent: React.FC<DataTabContentProps> = ({ influencerId }) => {
           <h3 className="text-lg font-semibold mb-4">Audience Growth Trajectory</h3>
           <ResponsiveContainer width="100%" height={200}>
             <LineChart data={audienceGrowthData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="month" />
-              <YAxis />
-              <Tooltip />
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+              <XAxis dataKey="month" stroke="hsl(var(--muted-foreground))" />
+              <YAxis stroke="hsl(var(--muted-foreground))" />
+              <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', color: 'hsl(var(--foreground))' }} />
               <Legend />
               <Line type="monotone" dataKey="instagram" stroke="#E1306C" />
               <Line type="monotone" dataKey="facebook" stroke="#4267B2" />
@@ -215,10 +215,10 @@ const DataTabContent: React.FC<DataTabContentProps> = ({ influencerId }) => {
           <h3 className="text-lg font-semibold mb-4">Link Clicks by Month</h3>
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={conversionFunnelData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} />
-              <XAxis dataKey="month" />
-              <YAxis />
-              <Tooltip />
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+              <XAxis dataKey="month" stroke="hsl(var(--muted-foreground))" />
+              <YAxis stroke="hsl(var(--muted-foreground))" />
+              <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', color: 'hsl(var(--foreground))' }} />
               <Legend />
               <Bar dataKey="clicks" fill="#8884d8" name="Link Clicks" />
             </BarChart>

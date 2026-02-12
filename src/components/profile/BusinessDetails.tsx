@@ -10,6 +10,7 @@ interface BusinessDetailsProps {
   website: string;
   location: string;
   isRegistered: boolean;
+  accountStatus?: string;
   onEdit?: () => void;
 }
 
@@ -20,6 +21,7 @@ const BusinessDetails: React.FC<BusinessDetailsProps> = ({
   website,
   location,
   isRegistered,
+  accountStatus,
   onEdit
 }) => {
   // Format example price in INR
@@ -36,15 +38,20 @@ const BusinessDetails: React.FC<BusinessDetailsProps> = ({
         <CardContent className="p-4">
           <div className="flex justify-between items-center mb-3">
             <h2 className="text-lg font-bold">Business Info</h2>
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              onClick={onEdit}
-              className="h-8 px-2"
-            >
-              <Pencil className="h-4 w-4 mr-1" />
-              Edit
-            </Button>
+            {onEdit && (
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => {
+                  console.log('Edit button clicked');
+                  onEdit();
+                }}
+                className="h-8 px-2"
+              >
+                <Pencil className="h-4 w-4 mr-1" />
+                Edit
+              </Button>
+            )}
           </div>
           <div className="space-y-3">
             <div>
@@ -77,13 +84,7 @@ const BusinessDetails: React.FC<BusinessDetailsProps> = ({
             </div>
             <div>
               <p className="text-gray-600 text-sm mb-1">Account Management</p>
-              <div className="flex items-center gap-2">
-                <select className="border rounded px-2 py-1 bg-gray-100 text-gray-700 text-sm">
-                  <option>Select</option>
-                  <option>Option 1</option>
-                  <option>Option 2</option>
-                </select>
-              </div>
+              <p className="font-medium">{accountStatus || 'Public'}</p>
             </div>
           </div>
         </CardContent>

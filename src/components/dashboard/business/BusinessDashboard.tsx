@@ -8,20 +8,21 @@ import DashboardHeader from './DashboardHeader';
 import MetricsSection from './MetricsSection';
 import ContentMetricsSection from './ContentMetricsSection';
 import TopPerformanceSection from './TopPerformanceSection';
-import { useBusinessDashboardData } from '@/hooks/useBusinessDashboardData';
+import { useDashboard } from '@/context/DashboardContext';
 
 const BusinessDashboard = () => {
   const navigate = useNavigate();
   const { 
     isLoading, 
     dashboardData, 
-    topPerformedOrders, 
     topInfluencers, 
     topBusinessUsers, 
-    pendingOrders,
-    handlePayRequest,
-    handleViewOrder 
-  } = useBusinessDashboardData();
+    pendingOrders
+  } = useDashboard();
+
+  const handleViewOrder = (orderId: string) => {
+    navigate('/orders');
+  };
 
   return (
     <div className="flex h-screen bg-background">
@@ -32,7 +33,6 @@ const BusinessDashboard = () => {
           <div className="max-w-7xl mx-auto">
             <DashboardHeader />
             
-            {/* Main metrics */}
             <MetricsSection 
               isLoading={isLoading} 
               totalSpent={dashboardData.totalSpent}
@@ -43,16 +43,14 @@ const BusinessDashboard = () => {
               impactScore={dashboardData.impactScore}
             />
             
-            {/* Content metrics */}
             <ContentMetricsSection 
               isLoading={isLoading}
               postStats={dashboardData.postStats}
             />
             
-            {/* Performance sections */}
             <TopPerformanceSection 
               isLoading={isLoading}
-              topPerformedOrders={topPerformedOrders}
+              topPerformedOrders={[]}
               topInfluencers={topInfluencers}
               topBusinessUsers={topBusinessUsers}
               pendingOrders={pendingOrders}

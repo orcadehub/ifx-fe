@@ -4,11 +4,11 @@ import PricingCard from './PricingCard';
 
 const PricingSection = () => {
   return (
-    <section id="pricing" className="py-20 px-6 bg-gray-50">
+    <section id="pricing" className="py-20 px-6 bg-muted">
       <div className="max-w-7xl mx-auto">
         <div className="text-center mb-16">
-          <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4 opacity-0 animate-fadeInUp">Transparent Pricing Plans</h2>
-          <p className="text-xl text-gray-600 max-w-3xl mx-auto opacity-0 animate-fadeInUp [animation-delay:100ms]">
+          <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4 opacity-0 animate-fadeInUp">Transparent Pricing Plans</h2>
+          <p className="text-xl text-muted-foreground max-w-3xl mx-auto opacity-0 animate-fadeInUp [animation-delay:100ms]">
             Choose the plan that fits your business needs. No hidden fees, cancel anytime.
           </p>
         </div>

@@ -1,6 +1,7 @@
 
 import React, { useState } from 'react';
 import Sidebar from '@/components/layout/Sidebar';
+import Header from '@/components/layout/Header';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -25,19 +26,148 @@ export const BillingPage = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isAddCardOpen, setIsAddCardOpen] = useState(false);
   const [isEditCardOpen, setIsEditCardOpen] = useState(false);
+  const [isRemoveCardOpen, setIsRemoveCardOpen] = useState(false);
   const [selectedCard, setSelectedCard] = useState<PaymentMethod | null>(null);
-  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([
-    {
-      id: 1,
-      cardNumber: "4242424242424242",
-      cardholderName: "John Doe",
-      expirationDate: "12/25",
-      last4: "4242"
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isAddingCard, setIsAddingCard] = useState(false);
+  const [isRemovingCard, setIsRemovingCard] = useState(false);
+  const [billingHistory, setBillingHistory] = useState<any[]>([]);
+  const [subscriptionPlans, setSubscriptionPlans] = useState<any[]>([]);
+  const [currentSubscription, setCurrentSubscription] = useState<any>(null);
+  const [isSubscribing, setIsSubscribing] = useState(false);
+
+  React.useEffect(() => {
+    fetchCards();
+    fetchBillingHistory();
+    fetchSubscriptionPlans();
+    fetchCurrentSubscription();
+  }, []);
+
+  const fetchCards = async () => {
+    try {
+      const authToken = localStorage.getItem('authToken');
+      const response = await fetch('http://localhost:3001/api/billing/cards', {
+        headers: { 'Authorization': `Bearer ${authToken}` }
+      });
+      const data = await response.json();
+      
+      if (data.success) {
+        const cards = data.cards.map((card: any) => ({
+          id: card.id,
+          cardNumber: '',
+          cardholderName: card.cardholder_name,
+          expirationDate: `${card.card_exp_month}/${card.card_exp_year}`,
+          last4: card.card_last4
+        }));
+        setPaymentMethods(cards);
+      }
+    } catch (error) {
+      console.error('Error fetching cards:', error);
+    } finally {
+      setLoading(false);
     }
-  ]);
+  };
+
+  const fetchBillingHistory = async () => {
+    try {
+      const authToken = localStorage.getItem('authToken');
+      const response = await fetch('http://localhost:3001/api/billing/operations', {
+        headers: { 'Authorization': `Bearer ${authToken}` }
+      });
+      const data = await response.json();
+      
+      if (data.success) {
+        const history = data.operations.map((op: any) => ({
+          id: op.id,
+          date: op.created_at,
+          plan: op.description || 'Subscription',
+          amount: parseFloat(op.amount),
+          paymentMethod: op.card_brand || 'Card',
+          status: op.status === 'completed' ? 'Paid' : op.status === 'pending' ? 'Pending' : 'Refunded',
+          invoiceId: op.id
+        }));
+        setBillingHistory(history);
+      }
+    } catch (error) {
+      console.error('Error fetching billing history:', error);
+    }
+  };
+
+  const fetchSubscriptionPlans = async () => {
+    try {
+      const response = await fetch('http://localhost:3001/api/billing/plans');
+      const data = await response.json();
+      
+      if (data.success) {
+        setSubscriptionPlans(data.plans);
+      }
+    } catch (error) {
+      console.error('Error fetching subscription plans:', error);
+    }
+  };
+
+  const fetchCurrentSubscription = async () => {
+    try {
+      const authToken = localStorage.getItem('authToken');
+      const response = await fetch('http://localhost:3001/api/billing/subscription', {
+        headers: { 'Authorization': `Bearer ${authToken}` }
+      });
+      const data = await response.json();
+      
+      if (data.success) {
+        setCurrentSubscription(data.subscription);
+      }
+    } catch (error) {
+      console.error('Error fetching current subscription:', error);
+    }
+  };
+
+  const handleSubscribe = async (planId: number) => {
+    setIsSubscribing(true);
+    
+    try {
+      const authToken = localStorage.getItem('authToken');
+      
+      const response = await fetch('http://localhost:3001/api/billing/subscribe', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`
+        },
+        body: JSON.stringify({ plan_id: planId })
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        await fetchCurrentSubscription();
+        await fetchBillingHistory();
+        toast({
+          title: "Subscription activated",
+          description: "Your subscription has been activated successfully.",
+        });
+      } else {
+        toast({
+          title: "Error",
+          description: data.message || "Failed to subscribe",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error('Error subscribing:', error);
+      toast({
+        title: "Error",
+        description: "Failed to subscribe to plan",
+        variant: "destructive"
+      });
+    } finally {
+      setIsSubscribing(false);
+    }
+  };
 
   // Sample billing history data
-  const billingHistory = [
+  const sampleBillingHistory = [
     {
       id: 1,
       date: '2024-01-15',
@@ -125,20 +255,55 @@ export const BillingPage = () => {
     });
   };
 
-  const handleAddCard = (data: any) => {
-    const newCard: PaymentMethod = {
-      id: paymentMethods.length + 1,
-      cardNumber: data.cardNumber,
-      cardholderName: data.cardholderName,
-      expirationDate: data.expirationDate,
-      last4: data.cardNumber.slice(-4)
-    };
-    setPaymentMethods([...paymentMethods, newCard]);
-    setIsAddCardOpen(false);
-    toast({
-      title: "Payment method added",
-      description: "Your card has been added successfully.",
-    });
+  const handleAddCard = async (data: any) => {
+    setIsAddingCard(true);
+    
+    try {
+      const authToken = localStorage.getItem('authToken');
+      
+      const response = await fetch('http://localhost:3001/api/billing/cards', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`
+        },
+        body: JSON.stringify({
+          card_token: 'tok_' + Math.random().toString(36).substr(2, 9),
+          card_last4: data.cardNumber.slice(-4),
+          card_brand: 'Visa',
+          card_exp_month: data.expirationDate.split('/')[0],
+          card_exp_year: data.expirationDate.split('/')[1],
+          cardholder_name: data.cardholderName,
+          is_default: true
+        })
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        await fetchCards();
+        setIsAddCardOpen(false);
+        toast({
+          title: "Payment method added",
+          description: "Your card has been added successfully.",
+        });
+      } else {
+        toast({
+          title: "Error",
+          description: result.message || "Failed to add card",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error('Error adding card:', error);
+      toast({
+        title: "Error",
+        description: "Failed to add card",
+        variant: "destructive"
+      });
+    } finally {
+      setIsAddingCard(false);
+    }
   };
 
   const handleEditCard = (data: any) => {
@@ -157,108 +322,158 @@ export const BillingPage = () => {
     });
   };
 
-  const totalAmount = billingHistory.reduce((sum, item) => sum + item.amount, 0);
+  const handleRemoveCard = async () => {
+    if (!selectedCard) return;
+    
+    setIsRemovingCard(true);
+    
+    try {
+      const authToken = localStorage.getItem('authToken');
+      
+      const response = await fetch(`http://localhost:3001/api/billing/cards/${selectedCard.id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${authToken}` }
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        await fetchCards();
+        setIsRemoveCardOpen(false);
+        setSelectedCard(null);
+        toast({
+          title: "Payment method removed",
+          description: "Your card has been removed successfully.",
+        });
+      } else {
+        toast({
+          title: "Error",
+          description: data.message || "Failed to remove card",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error('Error removing card:', error);
+      toast({
+        title: "Error",
+        description: "Failed to remove card",
+        variant: "destructive"
+      });
+    } finally {
+      setIsRemovingCard(false);
+    }
+  };
+
+  const totalAmount = billingHistory.reduce((sum, item) => sum + (item.amount || 0), 0);
+  if (loading) {
+    return (
+      <div className="flex h-screen bg-background">
+        <Sidebar />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Loading billing information...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="flex h-screen bg-background">
       <Sidebar />
-      <div className="flex-1 overflow-auto">
-        <div className="max-w-7xl mx-auto px-4 py-6">
-          <h1 className="text-2xl font-bold mb-6">Billing & Subscription</h1>
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <Header />
+        <div className="flex-1 overflow-auto">
+          <div className="max-w-7xl mx-auto px-4 py-6">
+          <h1 className="text-2xl font-bold mb-6 text-foreground">Billing & Subscription</h1>
           
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <Card className="border-2 border-transparent hover:border-primary transition-all duration-300">
+          {currentSubscription && (
+            <Card className="mb-6 border-primary">
               <CardHeader>
-                <CardTitle>Free Plan</CardTitle>
-                <CardDescription>Basic features for individuals</CardDescription>
-                <div className="mt-2 text-3xl font-bold">$0<span className="text-sm text-muted-foreground font-normal">/month</span></div>
+                <CardTitle>Current Subscription</CardTitle>
+                <CardDescription>Your active subscription details</CardDescription>
               </CardHeader>
               <CardContent>
-                <ul className="space-y-2 mb-6">
-                  <li className="flex items-center">
-                    <Check className="mr-2 h-4 w-4 text-green-500" />
-                    <span>5 campaigns per month</span>
-                  </li>
-                  <li className="flex items-center">
-                    <Check className="mr-2 h-4 w-4 text-green-500" />
-                    <span>Basic analytics</span>
-                  </li>
-                  <li className="flex items-center">
-                    <Check className="mr-2 h-4 w-4 text-green-500" />
-                    <span>Email support</span>
-                  </li>
-                </ul>
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Plan</p>
+                    <p className="font-semibold">{currentSubscription.name}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Started On</p>
+                    <p className="font-semibold">{formatDate(currentSubscription.start_date)}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Next Billing Date</p>
+                    <p className="font-semibold">{formatDate(currentSubscription.next_billing_date)}</p>
+                  </div>
+                </div>
               </CardContent>
-              <CardFooter>
-                <Button variant="outline" className="w-full">Current Plan</Button>
-              </CardFooter>
             </Card>
-
-            <Card className="border-2 border-primary shadow-lg relative">
-              <div className="absolute -top-3 right-4 bg-primary text-white px-3 py-1 rounded-full text-xs font-semibold">Popular</div>
-              <CardHeader>
-                <CardTitle>Standard Plan</CardTitle>
-                <CardDescription>Advanced features for growing businesses</CardDescription>
-                <div className="mt-2 text-3xl font-bold">$29<span className="text-sm text-muted-foreground font-normal">/month</span></div>
-              </CardHeader>
-              <CardContent>
-                <ul className="space-y-2 mb-6">
-                  <li className="flex items-center">
-                    <Check className="mr-2 h-4 w-4 text-green-500" />
-                    <span>25 campaigns per month</span>
-                  </li>
-                  <li className="flex items-center">
-                    <Check className="mr-2 h-4 w-4 text-green-500" />
-                    <span>Advanced analytics</span>
-                  </li>
-                  <li className="flex items-center">
-                    <Check className="mr-2 h-4 w-4 text-green-500" />
-                    <span>Priority support</span>
-                  </li>
-                  <li className="flex items-center">
-                    <Check className="mr-2 h-4 w-4 text-green-500" />
-                    <span>Custom reporting</span>
-                  </li>
-                </ul>
-              </CardContent>
-              <CardFooter>
-                <Button className="w-full">Upgrade Plan</Button>
-              </CardFooter>
-            </Card>
-
-            <Card className="border-2 border-transparent hover:border-primary transition-all duration-300">
-              <CardHeader>
-                <CardTitle>Premium Plan</CardTitle>
-                <CardDescription>Enterprise features for large teams</CardDescription>
-                <div className="mt-2 text-3xl font-bold">$99<span className="text-sm text-muted-foreground font-normal">/month</span></div>
-              </CardHeader>
-              <CardContent>
-                <ul className="space-y-2 mb-6">
-                  <li className="flex items-center">
-                    <Check className="mr-2 h-4 w-4 text-green-500" />
-                    <span>Unlimited campaigns</span>
-                  </li>
-                  <li className="flex items-center">
-                    <Check className="mr-2 h-4 w-4 text-green-500" />
-                    <span>Real-time analytics</span>
-                  </li>
-                  <li className="flex items-center">
-                    <Check className="mr-2 h-4 w-4 text-green-500" />
-                    <span>24/7 dedicated support</span>
-                  </li>
-                  <li className="flex items-center">
-                    <Check className="mr-2 h-4 w-4 text-green-500" />
-                    <span>Custom integrations</span>
-                  </li>
-                  <li className="flex items-center">
-                    <Check className="mr-2 h-4 w-4 text-green-500" />
-                    <span>White-labeling</span>
-                  </li>
-                </ul>
-              </CardContent>
-              <CardFooter>
-                <Button variant="outline" className="w-full">Upgrade Plan</Button>
-              </CardFooter>
-            </Card>
+          )}
+          
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            {subscriptionPlans.map((plan) => (
+              <Card key={plan.id} className={`border-2 ${plan.is_popular ? 'border-primary shadow-lg relative' : 'border-transparent hover:border-primary'} transition-all duration-300`}>
+                {plan.is_popular && (
+                  <div className="absolute -top-3 right-4 bg-primary text-white px-3 py-1 rounded-full text-xs font-semibold">Popular</div>
+                )}
+                <CardHeader>
+                  <CardTitle>{plan.name}</CardTitle>
+                  <CardDescription>{plan.description}</CardDescription>
+                  <div className="mt-2 text-3xl font-bold">${plan.price}<span className="text-sm text-muted-foreground font-normal">/{plan.billing_period}</span></div>
+                </CardHeader>
+                <CardContent>
+                  <ul className="space-y-2 mb-6">
+                    {plan.features.map((feature: string, index: number) => (
+                      <li key={index} className="flex items-center">
+                        <Check className="mr-2 h-4 w-4 text-green-500" />
+                        <span>{feature}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </CardContent>
+                <CardFooter>
+                  {parseFloat(plan.price) === 0 ? (
+                    currentSubscription && parseFloat(currentSubscription.price) > 0 ? (
+                      <Button 
+                        variant="outline" 
+                        className="w-full"
+                        onClick={() => handleSubscribe(plan.id)}
+                        disabled={isSubscribing}
+                      >
+                        {isSubscribing ? 'Processing...' : 'Downgrade to Free'}
+                      </Button>
+                    ) : (
+                      <Button 
+                        variant="outline" 
+                        className="w-full"
+                        disabled
+                      >
+                        Current Plan
+                      </Button>
+                    )
+                  ) : (
+                    <Button 
+                      variant={plan.is_popular ? 'default' : 'outline'} 
+                      className="w-full"
+                      onClick={() => handleSubscribe(plan.id)}
+                      disabled={isSubscribing || currentSubscription?.plan_id === plan.id}
+                    >
+                      {currentSubscription?.plan_id === plan.id 
+                        ? 'Current Plan' 
+                        : isSubscribing 
+                        ? 'Processing...' 
+                        : !currentSubscription || parseFloat(plan.price) > parseFloat(currentSubscription.price)
+                        ? 'Upgrade Plan'
+                        : 'Downgrade Plan'
+                      }
+                    </Button>
+                  )}
+                </CardFooter>
+              </Card>
+            ))}
           </div>
 
           <div className="mt-8">
@@ -268,52 +483,64 @@ export const BillingPage = () => {
                 <CardDescription>Manage your payment information</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  {paymentMethods.map((card) => (
-                    <div key={card.id} className="flex items-center p-4 border rounded-lg">
-                      <CreditCard className="h-6 w-6 mr-4" />
-                      <div>
-                        <p className="font-medium">•••• •••• •••• {card.last4}</p>
-                        <p className="text-sm text-muted-foreground">Expires {card.expirationDate}</p>
-                      </div>
-                      <div className="ml-auto">
-                        <Button 
-                          variant="ghost" 
-                          size="sm"
-                          onClick={() => {
-                            setSelectedCard(card);
-                            setIsEditCardOpen(true);
-                          }}
-                        >
-                          Edit
-                        </Button>
-                      </div>
+                {paymentMethods.length === 0 ? (
+                  <div className="text-center py-8">
+                    <CreditCard className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                    <p className="text-muted-foreground mb-4">No payment method added yet</p>
+                    <Button onClick={() => setIsAddCardOpen(true)}>
+                      Add Credit Card
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="space-y-4">
+                      {paymentMethods.map((card) => (
+                        <div key={card.id} className="flex items-center p-4 border rounded-lg">
+                          <CreditCard className="h-6 w-6 mr-4" />
+                          <div>
+                            <p className="font-medium">•••• •••• •••• {card.last4}</p>
+                            <p className="text-sm text-muted-foreground">Expires {card.expirationDate}</p>
+                          </div>
+                          <div className="ml-auto">
+                            <Button 
+                              variant="destructive" 
+                              size="sm"
+                              onClick={() => {
+                                setSelectedCard(card);
+                                setIsRemoveCardOpen(true);
+                              }}
+                            >
+                              Remove
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-                <Button 
-                  variant="outline" 
-                  className="mt-4"
-                  onClick={() => setIsAddCardOpen(true)}
-                >
-                  Add Payment Method
-                </Button>
+                    <Button 
+                      variant="outline" 
+                      className="mt-4"
+                      onClick={() => setIsAddCardOpen(true)}
+                    >
+                      Add Another Card
+                    </Button>
+                  </>
+                )}
               </CardContent>
             </Card>
           </div>
 
           <div className="mt-8">
-            <Card className="border-0 shadow-sm bg-white">
+            <Card>
               <CardHeader className="pb-4">
                 <div className="flex justify-between items-center">
                   <div>
-                    <CardTitle className="text-xl font-semibold text-gray-900">Billing History</CardTitle>
-                    <CardDescription className="text-gray-600 mt-1">View your recent invoices and payment history</CardDescription>
+                    <CardTitle className="text-xl font-semibold text-foreground">Billing History</CardTitle>
+                    <CardDescription className="text-muted-foreground mt-1">View your recent invoices and payment history</CardDescription>
                   </div>
                   <div className="flex items-center gap-2">
                     <Calendar className="h-4 w-4 text-purple-600" />
                     <Select value={dateFilter} onValueChange={setDateFilter}>
-                      <SelectTrigger className="w-40 border-gray-200 focus:border-purple-500 focus:ring-purple-500">
+                      <SelectTrigger className="w-40">
                         <SelectValue placeholder="Filter by Date" />
                       </SelectTrigger>
                       <SelectContent>
@@ -330,8 +557,8 @@ export const BillingPage = () => {
               <CardContent className="p-0">
                 <div className="overflow-hidden">
                   {/* Table Header */}
-                  <div className="bg-gray-50 border-b border-gray-200">
-                    <div className="grid grid-cols-6 gap-4 px-6 py-4 text-sm font-medium text-gray-700">
+                  <div className="bg-muted border-b">
+                    <div className="grid grid-cols-6 gap-4 px-6 py-4 text-sm font-medium text-foreground">
                       <div className="flex items-center gap-2">
                         <Calendar className="h-4 w-4 text-purple-600" />
                         Date
@@ -348,19 +575,19 @@ export const BillingPage = () => {
                   </div>
 
                   {/* Table Body */}
-                  <div className="divide-y divide-gray-100">
+                  <div className="divide-y divide-border">
                     {billingHistory.map((item) => (
-                      <div key={item.id} className="grid grid-cols-6 gap-4 px-6 py-4 hover:bg-gray-50 transition-colors">
-                        <div className="text-sm text-gray-900 font-medium">
+                      <div key={item.id} className="grid grid-cols-6 gap-4 px-6 py-4 hover:bg-muted/50 transition-colors">
+                        <div className="text-sm text-foreground font-medium">
                           {formatDate(item.date)}
                         </div>
-                        <div className="text-sm text-gray-700">
+                        <div className="text-sm text-muted-foreground">
                           {item.plan}
                         </div>
-                        <div className="text-sm font-semibold text-gray-900">
+                        <div className="text-sm font-semibold text-foreground">
                           {formatCurrency(item.amount)}
                         </div>
-                        <div className="flex items-center gap-2 text-sm text-gray-700">
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
                           {getPaymentMethodIcon(item.paymentMethod)}
                           {item.paymentMethod}
                         </div>
@@ -371,7 +598,7 @@ export const BillingPage = () => {
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="h-8 px-3 text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                            className="h-8 px-3"
                             onClick={() => {
                               setSelectedBilling(item);
                               setIsDialogOpen(true);
@@ -383,7 +610,7 @@ export const BillingPage = () => {
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="h-8 px-3 text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                            className="h-8 px-3"
                           >
                             <Download className="h-4 w-4 mr-1" />
                             Download
@@ -396,6 +623,7 @@ export const BillingPage = () => {
                 </div>
               </CardContent>
             </Card>
+          </div>
           </div>
         </div>
       </div>
@@ -412,6 +640,7 @@ export const BillingPage = () => {
           <PaymentMethodForm
             onSubmit={handleAddCard}
             onCancel={() => setIsAddCardOpen(false)}
+            isLoading={isAddingCard}
           />
         </DialogContent>
       </Dialog>
@@ -440,6 +669,37 @@ export const BillingPage = () => {
               }}
             />
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Remove Card Confirmation Dialog */}
+      <Dialog open={isRemoveCardOpen} onOpenChange={setIsRemoveCardOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Remove Payment Method</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to remove this card ending in {selectedCard?.last4}?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-3 mt-4">
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setIsRemoveCardOpen(false);
+                setSelectedCard(null);
+              }}
+              disabled={isRemovingCard}
+            >
+              Cancel
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={handleRemoveCard}
+              disabled={isRemovingCard}
+            >
+              {isRemovingCard ? 'Removing...' : 'Remove Card'}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 

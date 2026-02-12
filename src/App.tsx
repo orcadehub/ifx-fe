@@ -5,8 +5,9 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider } from "@/components/theme-provider";
+import { DashboardProvider } from "@/context/DashboardContext";
 import Index from "./pages/Index";
-import InfluencersPage from "./pages/influencers";
+import InfluencersPage from "./pages/influencers/simple";
 import InfluencerDetailPage from "./pages/influencers/detail";
 import ChatsPage from "./pages/chats";
 import ReachPage from "./pages/reach";
@@ -53,6 +54,8 @@ import ContactPage from "./pages/contact";
 import PricingPage from "./pages/pricing";
 import AdminReportsPage from "./pages/admin/reports/AdminReportsPage";
 import WishlistPage from "./pages/wishlist";
+import PublicProfilePage from "./pages/profile";
+import SuccessPage from "./pages/auth/success";
 
 function App() {
   const queryClient = new QueryClient({
@@ -78,13 +81,15 @@ function App() {
           <Sonner />
           <ErrorBoundary>
             <BrowserRouter>
-              <Routes>
+              <DashboardProvider>
+                <Routes>
                 <Route path="/" element={<Index />} />
                 <Route path="/landing" element={<LandingPage />} />
                 <Route path="/app" element={<Index />} />
                 
                 <Route path="/signin" element={<SignInPage />} />
                 <Route path="/signup" element={<SignUpPage />} />
+                <Route path="/auth/success" element={<SuccessPage />} />
                 
                 <Route path="/features" element={<FeaturesPage />} />
                 <Route path="/about" element={<AboutPage />} />
@@ -92,6 +97,8 @@ function App() {
                 <Route path="/pricing" element={<PricingPage />} />
                 
                 <Route path="/influencers" element={<InfluencersPage />} />
+                <Route path="/influencers/simple" element={<InfluencersPage />} />
+                <Route path="/influencers/simple/:id" element={<InfluencersPage />} />
                 <Route path="/influencers/:id" element={<InfluencerDetailPage />} />
                 <Route path="/chats" element={<ChatsPage />} />
                 <Route path="/reach" element={<ReachPage />} />
@@ -139,8 +146,10 @@ function App() {
                 <Route path="/checkout" element={<CheckoutPage />} />
                 <Route path="/payment" element={<PaymentPage />} />
                 
+                <Route path="/profile/:userid" element={<PublicProfilePage />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
+              </DashboardProvider>
             </BrowserRouter>
           </ErrorBoundary>
         </TooltipProvider>

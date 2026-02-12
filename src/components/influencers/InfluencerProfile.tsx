@@ -1,214 +1,434 @@
-
-import React from 'react';
-import { Avatar } from '@/components/ui/avatar';
-import { Instagram, Facebook, Youtube, Twitter, Copy, Share2, ArrowUp, ArrowDown, Activity } from 'lucide-react';
-import { formatNumber } from '@/components/influencers/utils/formatUtils';
-import { formatCurrency } from '@/components/reach/utils/formatUtils';
-import PricesTabContent from '@/components/influencers/PricesTabContent';
-import DataTabContent from '@/components/influencers/DataTabContent';
-import ServicesTabContent from '@/components/influencers/ServicesTabContent';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import React, { useState } from 'react';
+import { Heart, MessageCircle, Share2, Dot, Eye, Share } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useToast } from '@/hooks/use-toast';
-import { Card, CardContent } from '@/components/ui/card';
+import { FaInstagram, FaFacebook, FaYoutube, FaTwitter, FaHeart, FaEye, FaComment, FaShare } from 'react-icons/fa';
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, LineChart, Line, BarChart, Bar, CartesianGrid } from 'recharts';
+import { useNavigate } from 'react-router-dom';
 
 interface InfluencerProfileProps {
-  influencer?: any | null;
+  influencer: any;
+  onWishlistToggle: () => void;
+  onBook: () => void;
 }
 
-const InfluencerProfile: React.FC<InfluencerProfileProps> = ({ influencer }) => {
-  const { toast } = useToast();
+const formatFollowers = (num: number) => {
+  if (!num || num === 0) return '0';
+  if (num >= 1000000000000) return (num / 1000000000000).toFixed(1).replace(/\.0$/, '') + 'T';
+  if (num >= 1000000000) return (num / 1000000000).toFixed(1).replace(/\.0$/, '') + 'B';
+  if (num >= 1000000) return (num / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+  if (num >= 1000) return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
+  return num.toString();
+};
 
-  const handleCopyEmail = () => {
-    if (influencer?.email) {
-      navigator.clipboard.writeText(influencer.email);
-      toast({
-        title: "Email Copied",
-        description: "Email address copied to clipboard",
-      });
-    }
+const getPlatformIcon = (platform: string) => {
+  const platformLower = platform?.toLowerCase();
+  switch (platformLower) {
+    case 'instagram':
+      return <FaInstagram style={{ background: 'linear-gradient(45deg, #405DE6, #5851DB, #833AB4, #C13584, #E1306C, #FD1D1D, #F56040, #FCAF45)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }} />;
+    case 'facebook':
+      return <FaFacebook style={{ color: '#1877F2' }} />;
+    case 'twitter':
+      return <FaTwitter style={{ color: '#1DA1F2' }} />;
+    case 'youtube':
+      return <FaYoutube style={{ color: '#FF0000' }} />;
+    default:
+      return null;
+  }
+};
+
+const InfluencerProfile: React.FC<InfluencerProfileProps> = ({ influencer, onWishlistToggle, onBook }) => {
+  const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState('services');
+  const [selectedPriceTab, setSelectedPriceTab] = useState('Platform Based');
+  const [selectedPlatform, setSelectedPlatform] = useState('ChoosePlatform');
+  const [selectedServicePlatform, setSelectedServicePlatform] = useState('all');
+
+  const handleChatClick = () => {
+    navigate('/chats', { state: { selectedUserId: influencer.id } });
   };
 
-  if (!influencer) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full p-8 text-center">
-        <div className="text-muted-foreground mb-2">
-          <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="8" r="5" />
-            <path d="M20 21a8 8 0 0 0-16 0" />
-          </svg>
-        </div>
-        <h3 className="text-xl font-medium text-muted-foreground mb-1">No Profile Selected</h3>
-        <p className="text-muted-foreground">Please select an influencer profile to display their data</p>
-      </div>
-    );
-  }
-  
   return (
-    <div className="p-6">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-        {/* Profile Section (Left Column) */}
-        <div className="bg-gray-50 rounded-lg p-6">
-          {/* Profile Header */}
-          <div className="flex items-start gap-3 mb-4">
-            <Avatar className="h-16 w-16">
-              <img 
-                src={influencer.image_url || 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=200'} 
-                alt={influencer.name} 
-                className="h-full w-full object-cover"
+    <div className="border border-border h-[calc(100vh-195px)] rounded-xl bg-card p-2 md:p-4">
+      <div className="flex justify-between items-center mb-1 pb-2">
+        <h4 className="font-bold mb-0 text-foreground">Profile</h4>
+        <Button onClick={onBook} className="bg-primary text-white rounded-lg text-sm px-4 py-2">
+          Book Now
+        </Button>
+      </div>
+
+      {/* Profile Header */}
+      <div className="flex items-center justify-between flex-wrap gap-3 rounded mb-4">
+        <div className="flex items-center gap-3 flex-grow">
+          <img
+            src={influencer.profilePic || influencer.profile_pic || `https://picsum.photos/seed/${influencer.id}/150`}
+            className="rounded-full border border-border"
+            width="60"
+            height="60"
+            alt="Profile"
+          />
+          <div>
+            <h5 className="font-semibold mb-1 flex items-center gap-3 text-foreground">
+              {influencer.name}
+              <Heart
+                size={18}
+                className={`cursor-pointer ${influencer.wishlist ? 'text-red-500 fill-red-400' : 'text-foreground'}`}
+                title={influencer.wishlist ? 'Remove from wishlist' : 'Add to wishlist'}
+                onClick={onWishlistToggle}
               />
-            </Avatar>
-            <div className="flex-1">
-              <h2 className="text-lg font-semibold text-foreground">
-                {influencer.username || '@' + influencer.name.toLowerCase().replace(/\s+/g, '')}
-              </h2>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                {influencer.email}
-                <button onClick={handleCopyEmail} className="text-gray-500 hover:text-gray-700">
-                  <Copy size={14} />
-                </button>
-              </div>
-            </div>
-            <Button variant="ghost" size="icon" className="h-8 w-8 mt-1">
-              <Share2 className="h-4 w-4" />
-            </Button>
-          </div>
-          
-          {/* Social Media Followers */}
-          <div className="flex justify-between mb-6">
-            {influencer.followers_instagram > 0 && (
-              <div className="flex flex-col items-center">
-                <div className="w-10 h-10 bg-pink-600 rounded-full flex items-center justify-center text-white mb-1">
-                  <Instagram size={20} />
-                </div>
-                <span className="text-sm font-medium">{formatNumber(influencer.followers_instagram)}</span>
-              </div>
-            )}
-            {influencer.followers_facebook > 0 && (
-              <div className="flex flex-col items-center">
-                <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white mb-1">
-                  <Facebook size={20} />
-                </div>
-                <span className="text-sm font-medium">{formatNumber(influencer.followers_facebook)}</span>
-              </div>
-            )}
-            {influencer.followers_youtube > 0 && (
-              <div className="flex flex-col items-center">
-                <div className="w-10 h-10 bg-red-600 rounded-full flex items-center justify-center text-white mb-1">
-                  <Youtube size={20} />
-                </div>
-                <span className="text-sm font-medium">{formatNumber(influencer.followers_youtube)}</span>
-              </div>
-            )}
-            {influencer.followers_twitter > 0 && (
-              <div className="flex flex-col items-center">
-                <div className="w-10 h-10 bg-blue-400 rounded-full flex items-center justify-center text-white mb-1">
-                  <Twitter size={20} />
-                </div>
-                <span className="text-sm font-medium">{formatNumber(influencer.followers_twitter)}</span>
-              </div>
-            )}
-          </div>
-
-          {/* Stats Metrics */}
-          <div className="grid grid-cols-3 gap-2 mb-6">
-            <div className="bg-white p-3 rounded-lg text-center">
-              <div className="text-xl font-bold">90</div>
-              <div className="text-xs text-gray-500">Total Campaigns</div>
-            </div>
-            <div className="bg-white p-3 rounded-lg text-center">
-              <div className="text-xl font-bold">90</div>
-              <div className="text-xs text-gray-500">Avg Likes</div>
-            </div>
-            <div className="bg-white p-3 rounded-lg text-center">
-              <div className="text-xl font-bold">90</div>
-              <div className="text-xs text-gray-500">Engagement</div>
-            </div>
-            <div className="bg-white p-3 rounded-lg text-center">
-              <div className="text-xl font-bold">90</div>
-              <div className="text-xs text-gray-500">Avg Comments</div>
-            </div>
-            <div className="bg-white p-3 rounded-lg text-center">
-              <div className="text-xl font-bold">90</div>
-              <div className="text-xs text-gray-500">Avg Shares</div>
-            </div>
-            <div className="bg-white p-3 rounded-lg text-center">
-              <div className="text-xl font-bold">90</div>
-              <div className="text-xs text-gray-500">Fake Followers</div>
-            </div>
-          </div>
-
-          {/* Network Stats */}
-          <div className="mt-8 space-y-6">
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <ArrowUp className="text-blue-500" />
-                <span className="font-medium">Upload</span>
-                <span className="ml-auto text-gray-700 font-medium">5,03 mbps</span>
-              </div>
-              <div className="h-16 bg-blue-50 rounded-lg mb-4 overflow-hidden relative">
-                <div className="absolute inset-0 flex items-end">
-                  <svg className="w-full h-full" viewBox="0 0 100 25">
-                    <path d="M0,15 Q10,10 20,15 T40,10 T60,20 T80,5 T100,15" fill="none" stroke="#3b82f6" strokeWidth="2"></path>
-                  </svg>
-                </div>
-              </div>
-            </div>
-
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <ArrowDown className="text-blue-300" />
-                <span className="font-medium">Download</span>
-                <span className="ml-auto text-gray-700 font-medium">14,34 mbps</span>
-              </div>
-              <div className="h-16 bg-blue-50 rounded-lg mb-4 overflow-hidden relative">
-                <div className="absolute inset-0 flex items-end">
-                  <svg className="w-full h-full" viewBox="0 0 100 25">
-                    <path d="M0,10 Q10,20 20,5 T40,15 T60,5 T80,20 T100,10" fill="none" stroke="#93c5fd" strokeWidth="2"></path>
-                  </svg>
-                </div>
-              </div>
-            </div>
-
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <Activity className="text-green-500" />
-                <span className="font-medium">Ping</span>
-                <span className="ml-auto text-gray-700 font-medium">10 ms</span>
-              </div>
-              <div className="h-16 bg-green-50 rounded-lg overflow-hidden relative">
-                <div className="absolute inset-0 flex items-end">
-                  <svg className="w-full h-full" viewBox="0 0 100 25">
-                    <path d="M0,15 Q10,10 20,15 T40,10 T60,15 T80,5 T100,10" fill="none" stroke="#22c55e" strokeWidth="2"></path>
-                  </svg>
-                </div>
-              </div>
+              <MessageCircle
+                className="text-foreground cursor-pointer"
+                title="Chat"
+                size={18}
+                onClick={handleChatClick}
+              />
+            </h5>
+            <div className="text-muted-foreground flex items-center gap-2 text-sm">
+              <span>{influencer?.category}</span>
+              <span className="flex items-center">
+                <Dot /> {influencer?.location_city || 'Location not specified'}, {influencer?.location_state || ''}
+              </span>
+              <Share2 className="text-foreground" title="Share" size={14} />
             </div>
           </div>
         </div>
 
-        {/* Tabs Section (Right Column) */}
-        <div className="md:col-span-2">
-          <Tabs defaultValue="services">
-            <TabsList className="w-full mb-6">
-              <TabsTrigger value="services" className="flex-1">Services</TabsTrigger>
-              <TabsTrigger value="prices" className="flex-1">Prices</TabsTrigger>
-              <TabsTrigger value="data" className="flex-1">Data</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="services">
-              <ServicesTabContent influencerId={influencer.id} influencerName={influencer.name} />
-            </TabsContent>
-
-            <TabsContent value="prices">
-              <PricesTabContent influencerId={influencer.id} influencerName={influencer.name} />
-            </TabsContent>
-
-            <TabsContent value="data">
-              <DataTabContent influencerId={influencer.id} />
-            </TabsContent>
-          </Tabs>
+        <div className="flex justify-center md:justify-end items-center w-full md:w-fit gap-5 md:gap-4 flex-wrap text-center">
+          <div className="flex flex-col items-center">
+            <FaInstagram color="#E1306C" size={26} />
+            <div className="font-bold text-foreground">
+              {formatFollowers(influencer.data?.instagram?.total_followers)}
+            </div>
+          </div>
+          <div className="flex flex-col items-center">
+            <FaFacebook color="#1877F2" size={26} />
+            <div className="font-bold text-foreground">
+              {formatFollowers(influencer.data?.facebook?.total_followers)}
+            </div>
+          </div>
+          <div className="flex flex-col items-center">
+            <FaYoutube color="#FF0000" size={26} />
+            <div className="font-bold text-foreground">
+              {formatFollowers(influencer.data?.youtube?.total_followers)}
+            </div>
+          </div>
+          <div className="flex flex-col items-center">
+            <FaTwitter color="#1DA1F2" size={26} />
+            <div className="font-bold text-foreground">
+              {formatFollowers(influencer.data?.twitter?.total_followers)}
+            </div>
+          </div>
         </div>
+      </div>
+
+      {/* Tab Navigation */}
+      <div className="flex mb-4 w-full md:px-3 gap-2">
+        <div className="flex w-full p-1 gap-2 rounded-xl bg-accent">
+          {['services', 'prices', 'data'].map((tab) => (
+            <button
+              key={tab}
+              className={`w-full text-center font-medium text-sm py-1 border-0 text-foreground ${
+                activeTab === tab ? 'bg-background' : ''
+              }`}
+              onClick={() => setActiveTab(tab)}
+            >
+              {tab.charAt(0).toUpperCase() + tab.slice(1)}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Tab Content */}
+      <div className="h-[calc(100vh-425px)] overflow-y-auto">
+        {activeTab === 'services' && (
+          <div className="px-2">
+            <div className="flex justify-between items-center mb-3">
+              <h5 className="font-semibold text-foreground">Services</h5>
+              <select
+                className="px-3 py-1 border border-border bg-background text-foreground text-sm"
+                value={selectedServicePlatform}
+                onChange={(e) => setSelectedServicePlatform(e.target.value)}
+              >
+                <option value="all">All Platforms</option>
+                <option value="instagram">Instagram</option>
+                <option value="facebook">Facebook</option>
+                <option value="youtube">YouTube</option>
+                <option value="twitter">Twitter</option>
+              </select>
+            </div>
+            {influencer.posts && influencer.posts.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {influencer.posts
+                  .filter((post: any) => selectedServicePlatform === 'all' || post.platform?.[0]?.toLowerCase() === selectedServicePlatform)
+                  .map((post: any) => (
+                  <div key={post.id} className="border border-border rounded-lg overflow-hidden bg-card hover:shadow-lg transition-all">
+                    <div className="relative">
+                      <img src={post.image} alt={post.title} className="w-full h-36 object-cover" />
+                      <span className="absolute top-2 right-2 text-xl">
+                        {getPlatformIcon(post.platform?.[0] || 'instagram')}
+                      </span>
+                    </div>
+                    <div className="p-2">
+                      <div className="flex justify-around text-xs text-muted-foreground">
+                        <div className="flex flex-col items-center gap-1">
+                          <FaHeart className="text-red-500" />
+                          <span>{post.likes}</span>
+                        </div>
+                        <div className="flex flex-col items-center gap-1">
+                          <FaEye className="text-foreground" />
+                          <span>{post.views}</span>
+                        </div>
+                        <div className="flex flex-col items-center gap-1">
+                          <FaComment className="text-foreground" />
+                          <span>{post.comments}</span>
+                        </div>
+                        <div className="flex flex-col items-center gap-1">
+                          <FaShare className="text-foreground" />
+                          <span>{post.shares}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center text-muted-foreground flex justify-center items-center h-full">
+                No posts available.
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'prices' && (
+          <div className="px-3">
+            {influencer.pricing || influencer.customPackages?.length > 0 ? (
+              <div className="space-y-4">
+                {/* Tab Options */}
+                <div className="flex gap-2 bg-accent p-1 rounded-xl mb-3">
+                  {['Platform Based', 'Custom Package'].map((tab) => (
+                    <button
+                      key={tab}
+                      className={`flex-1 text-center font-medium text-sm py-1 border-0 text-foreground rounded-lg transition-all ${
+                        selectedPriceTab === tab ? 'bg-background shadow' : ''
+                      }`}
+                      onClick={() => setSelectedPriceTab(tab)}
+                    >
+                      {tab}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Platform Based Content */}
+                {selectedPriceTab === 'Platform Based' && influencer.pricing && (
+                  <div>
+                    <div className="flex justify-between items-center mb-3">
+                      <h5 className="font-semibold text-foreground">Platform Services</h5>
+                      <select
+                        className="px-3 py-1 border border-border bg-background text-foreground text-sm"
+                        value={selectedPlatform}
+                        onChange={(e) => setSelectedPlatform(e.target.value)}
+                      >
+                        <option value="ChoosePlatform">Choose Platform</option>
+                        {Object.keys(influencer.pricing).map((platform) => (
+                          <option key={platform} value={platform}>
+                            {platform.charAt(0).toUpperCase() + platform.slice(1)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {selectedPlatform === 'ChoosePlatform' ? (
+                      <div className="border border-border rounded-xl overflow-hidden">
+                        <div className="px-3 py-2 font-semibold text-foreground bg-accent">
+                          All Platform Services
+                        </div>
+                        <div className="px-3 py-2">
+                          {(() => {
+                            const serviceMap = new Map();
+                            Object.entries(influencer.pricing).forEach(([platform, services]: [string, any]) => {
+                              Object.entries(services).forEach(([service, price]: [string, any]) => {
+                                const numPrice = Number(String(price).replace(/[^0-9.]/g, '')) || 0;
+                                const existing = serviceMap.get(service);
+                                if (!existing || (numPrice > 0 && numPrice > existing) || (existing === 0 && numPrice > 0)) {
+                                  serviceMap.set(service, numPrice);
+                                }
+                              });
+                            });
+                            return Array.from(serviceMap.entries()).map(([service, price]) => (
+                              <div key={service} className="flex justify-between items-center py-2 border-b border-border last:border-0">
+                                <span className="text-sm text-foreground">{service}</span>
+                                <span className="font-medium text-primary">₹{price}</span>
+                              </div>
+                            ));
+                          })()}
+                        </div>
+                      </div>
+                    ) : (
+                      influencer.pricing[selectedPlatform] && (
+                        <div className="border border-border rounded-xl overflow-hidden">
+                          <div className="px-3 py-2 font-semibold text-foreground capitalize bg-accent">
+                            {selectedPlatform}
+                          </div>
+                          <div className="px-3 py-2">
+                            {Object.entries(influencer.pricing[selectedPlatform]).map(([service, price]: [string, any]) => (
+                              <div key={service} className="flex justify-between items-center py-2 border-b border-border last:border-0">
+                                <span className="text-sm text-foreground">{service}</span>
+                                <span className="font-medium text-primary">₹{String(price).replace(/[^0-9.]/g, '') || 0}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )
+                    )}
+                  </div>
+                )}
+                
+                {/* Custom Packages Content */}
+                {selectedPriceTab === 'Custom Package' && influencer.customPackages && influencer.customPackages.length > 0 && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {influencer.customPackages.map((pkg: any, idx: number) => (
+                      <div key={idx} className="border border-border rounded-lg p-3 bg-card hover:shadow-lg transition-all">
+                        <h5 className="font-semibold text-foreground mb-2">{pkg.package_name}</h5>
+                        <p className="text-xs text-muted-foreground mb-3">{pkg.description}</p>
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs text-muted-foreground">Platforms: {pkg.platforms?.join(', ')}</span>
+                          <span className="font-bold text-lg text-primary">₹{pkg.price}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {selectedPriceTab === 'Custom Package' && (!influencer.customPackages || influencer.customPackages.length === 0) && (
+                  <div className="text-center text-muted-foreground py-4">
+                    No custom packages available
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="text-center text-muted-foreground">
+                No pricing information available.
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'data' && (
+          <div className="w-full overflow-auto px-2">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 mb-4">
+              {[
+                { label: 'Total Posts', value: influencer.metrics?.total_posts || 0 },
+                { label: 'Total Campaigns', value: influencer.metrics?.total_campaigns || influencer.data?.totalCampaigns || 0 },
+                { label: 'Avg Likes', value: formatFollowers(Math.round((influencer.metrics?.avg_likes || influencer.data?.avgLikes || 0) * 100) / 100) },
+                { label: 'Avg Views', value: formatFollowers(Math.round((influencer.metrics?.avg_views || influencer.data?.avgViews || 0) * 100) / 100) },
+                { label: 'Avg Comments', value: formatFollowers(Math.round((influencer.metrics?.avg_comments || 0) * 100) / 100) },
+                { label: 'Avg Shares', value: formatFollowers(Math.round((influencer.metrics?.avg_shares || 0) * 100) / 100) },
+                { label: 'Engagement Rate', value: influencer.metrics?.engagement_rate ? `${(Math.round(influencer.metrics.engagement_rate * 100) / 100).toFixed(2)}%` : influencer.data?.engagement || '0%' },
+                { label: 'Fake Followers', value: influencer.metrics?.fake_followers_percentage ? `${(Math.round(influencer.metrics.fake_followers_percentage * 100) / 100).toFixed(2)}%` : '0%' }
+              ].map(({ label, value }) => (
+                <div key={label} className="border border-border rounded-xl p-3 text-center hover:shadow-xl bg-card transition-all">
+                  <div className="font-medium text-foreground text-2xl">{value}</div>
+                  <div className="text-sm text-muted-foreground">{label}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Charts Section */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+              {/* Platform Engagement */}
+              <div className="border border-border rounded-xl bg-card p-3">
+                <h6 className="font-semibold text-foreground mb-3">Platform Engagement</h6>
+                <ResponsiveContainer width="100%" height={200}>
+                  <AreaChart data={[
+                    { platform: 'Instagram', engagement: influencer.data?.instagram?.total_followers || 0 },
+                    { platform: 'Facebook', engagement: influencer.data?.facebook?.total_followers || 0 },
+                    { platform: 'YouTube', engagement: influencer.data?.youtube?.total_followers || 0 },
+                    { platform: 'Twitter', engagement: influencer.data?.twitter?.total_followers || 0 }
+                  ]}>
+                    <XAxis dataKey="platform" stroke="hsl(var(--muted-foreground))" tick={{ fill: 'hsl(var(--foreground))', fontSize: 12 }} />
+                    <YAxis stroke="hsl(var(--muted-foreground))" tick={{ fill: 'hsl(var(--foreground))', fontSize: 12 }} />
+                    <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', color: 'hsl(var(--foreground))' }} />
+                    <Area type="monotone" dataKey="engagement" stroke="hsl(var(--primary))" fill="hsl(var(--primary))" fillOpacity={0.2} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Content Performance by Platform */}
+              <div className="border border-border rounded-xl bg-card p-3">
+                <h6 className="font-semibold text-foreground mb-3">Content Performance by Platform</h6>
+                <ResponsiveContainer width="100%" height={200}>
+                  <PieChart>
+                    <Pie
+                      data={[
+                        { name: 'Instagram', value: influencer.data?.instagram?.total_followers || 0 },
+                        { name: 'Facebook', value: influencer.data?.facebook?.total_followers || 0 },
+                        { name: 'YouTube', value: influencer.data?.youtube?.total_followers || 0 },
+                        { name: 'Twitter', value: influencer.data?.twitter?.total_followers || 0 }
+                      ]}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={60}
+                      label={{ fontSize: 12 }}
+                    >
+                      <Cell fill="#E1306C" />
+                      <Cell fill="#1877F2" />
+                      <Cell fill="#FF0000" />
+                      <Cell fill="#1DA1F2" />
+                    </Pie>
+                    <Legend wrapperStyle={{ fontSize: '10px' }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Audience Growth Trajectory */}
+              <div className="border border-border rounded-xl bg-card p-3">
+                <h6 className="font-semibold text-foreground mb-3">Audience Growth Trajectory</h6>
+                <ResponsiveContainer width="100%" height={200}>
+                  <LineChart data={[
+                    { month: 'Jan', instagram: 1000, youtube: 900, facebook: 800, twitter: 600 },
+                    { month: 'Feb', instagram: 1200, youtube: 950, facebook: 950, twitter: 700 },
+                    { month: 'Mar', instagram: 1400, youtube: 1000, facebook: 1100, twitter: 800 },
+                    { month: 'Apr', instagram: 1600, youtube: 1050, facebook: 1200, twitter: 900 },
+                    { month: 'May', instagram: 1800, youtube: 1100, facebook: 1300, twitter: 950 },
+                    { month: 'Jun', instagram: 2000, youtube: 1200, facebook: 1400, twitter: 1000 }
+                  ]}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis dataKey="month" stroke="hsl(var(--muted-foreground))" />
+                    <YAxis stroke="hsl(var(--muted-foreground))" />
+                    <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', color: 'hsl(var(--foreground))' }} />
+                    <Legend />
+                    <Line type="monotone" dataKey="instagram" stroke="#E1306C" strokeWidth={2} />
+                    <Line type="monotone" dataKey="youtube" stroke="#FF0000" strokeWidth={2} />
+                    <Line type="monotone" dataKey="facebook" stroke="#1877F2" strokeWidth={2} />
+                    <Line type="monotone" dataKey="twitter" stroke="#1DA1F2" strokeWidth={2} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Link Clicks by Month */}
+              <div className="border border-border rounded-xl bg-card p-3">
+                <h6 className="font-semibold text-foreground mb-3">Link Clicks by Month</h6>
+                <ResponsiveContainer width="100%" height={200}>
+                  <BarChart data={[
+                    { month: 'Jan', clicks: 2500 },
+                    { month: 'Feb', clicks: 3000 },
+                    { month: 'Mar', clicks: 3500 },
+                    { month: 'Apr', clicks: 3200 },
+                    { month: 'May', clicks: 4000 }
+                  ]}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis dataKey="month" stroke="hsl(var(--muted-foreground))" />
+                    <YAxis stroke="hsl(var(--muted-foreground))" />
+                    <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', color: 'hsl(var(--foreground))' }} />
+                    <Legend />
+                    <Bar dataKey="clicks" fill="#a78bfa" barSize={40} radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

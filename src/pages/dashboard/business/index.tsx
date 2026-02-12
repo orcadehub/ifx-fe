@@ -1,4 +1,3 @@
-
 import React from 'react';
 import BusinessDashboard from '@/components/dashboard/business/BusinessDashboard';
 

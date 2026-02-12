@@ -1,12 +1,15 @@
 
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
+import { getWalletBalance } from '@/lib/wallet-api';
+import { createWalletOrder, verifyWalletPayment } from '@/lib/wallet-api';
 import type { Order, CouponCode } from '@/types/order';
 
 const CheckoutPage = () => {
@@ -16,9 +19,36 @@ const CheckoutPage = () => {
   const [couponCode, setCouponCode] = useState('');
   const [isValidating, setIsValidating] = useState(false);
   const [appliedCoupon, setAppliedCoupon] = useState<CouponCode | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [useWallet, setUseWallet] = useState(false);
   
-  // In a real app, this would come from the previous page's state
   const order = location.state?.order as Order;
+
+  const { data: walletBalance = 0 } = useQuery({
+    queryKey: ['wallet-balance'],
+    queryFn: getWalletBalance,
+    enabled: !!order
+  });
+
+  const verifyPaymentMutation = useMutation({
+    mutationFn: verifyWalletPayment,
+    onSuccess: () => {
+      setIsProcessing(false);
+      toast({
+        title: "Payment Successful",
+        description: "Your order has been placed successfully.",
+      });
+      navigate('/orders');
+    },
+    onError: (error: any) => {
+      setIsProcessing(false);
+      toast({
+        title: "Payment Failed",
+        description: error.message || "Payment verification failed",
+        variant: "destructive",
+      });
+    }
+  });
   
   if (!order) {
     return (
@@ -65,13 +95,66 @@ const CheckoutPage = () => {
     return order.amount;
   };
 
-  const handleProceedToPayment = () => {
-    navigate('/payment', { 
-      state: { 
-        order,
-        appliedCoupon 
-      }
-    });
+  const handleProceedToPayment = async () => {
+    const totalAmount = calculateTotal();
+    
+    if (useWallet && walletBalance >= totalAmount) {
+      // Pay fully with wallet
+      toast({
+        title: "Processing",
+        description: "Processing wallet payment...",
+      });
+      // TODO: Call wallet payment API
+      setTimeout(() => {
+        toast({
+          title: "Success",
+          description: "Payment completed using wallet.",
+        });
+        navigate('/orders');
+      }, 1500);
+      return;
+    }
+
+    setIsProcessing(true);
+    try {
+      const paymentAmount = useWallet ? totalAmount - walletBalance : totalAmount;
+      const orderData = await createWalletOrder(paymentAmount);
+      
+      const options = {
+        key: orderData.key,
+        amount: orderData.amount,
+        currency: orderData.currency,
+        order_id: orderData.orderId,
+        name: "InfluexKonnect",
+        description: `Payment for Order #${order.orderNumber}`,
+        handler: async (response: any) => {
+          verifyPaymentMutation.mutate({
+            razorpay_order_id: response.razorpay_order_id,
+            razorpay_payment_id: response.razorpay_payment_id,
+            razorpay_signature: response.razorpay_signature,
+            amount: orderData.amount
+          });
+        },
+        modal: {
+          ondismiss: () => {
+            setIsProcessing(false);
+          }
+        },
+        theme: {
+          color: "#3399cc"
+        }
+      };
+
+      const razorpay = new (window as any).Razorpay(options);
+      razorpay.open();
+    } catch (error: any) {
+      setIsProcessing(false);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to initiate payment",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
@@ -159,10 +242,34 @@ const CheckoutPage = () => {
                       <span>-₹{((order.amount || 0) * (appliedCoupon.discount / 100)).toFixed(2)}</span>
                     </div>
                   )}
+
+                  {walletBalance > 0 && (
+                    <div className="flex items-center justify-between mb-2 p-3 bg-muted rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          id="useWallet"
+                          checked={useWallet}
+                          onChange={(e) => setUseWallet(e.target.checked)}
+                          className="w-4 h-4"
+                        />
+                        <Label htmlFor="useWallet" className="cursor-pointer">
+                          Use Wallet Balance (₹{walletBalance.toFixed(2)})
+                        </Label>
+                      </div>
+                    </div>
+                  )}
+
+                  {useWallet && walletBalance > 0 && (
+                    <div className="flex justify-between mb-2 text-green-600">
+                      <span>Wallet Deduction:</span>
+                      <span>-₹{Math.min(walletBalance, calculateTotal()).toFixed(2)}</span>
+                    </div>
+                  )}
                   
                   <div className="flex justify-between font-bold text-lg mt-2 pt-2 border-t">
-                    <span>Total:</span>
-                    <span>₹{calculateTotal().toFixed(2)}</span>
+                    <span>Total to Pay:</span>
+                    <span>₹{Math.max(0, calculateTotal() - (useWallet ? walletBalance : 0)).toFixed(2)}</span>
                   </div>
                 </div>
               </div>
@@ -172,8 +279,9 @@ const CheckoutPage = () => {
               className="w-full mt-6" 
               size="lg"
               onClick={handleProceedToPayment}
+              disabled={isProcessing}
             >
-              Proceed to Payment
+              {isProcessing ? 'Processing...' : 'Proceed to Payment'}
             </Button>
           </CardContent>
         </Card>

@@ -16,14 +16,14 @@ interface BusinessEditModalProps {
   onClose: () => void;
   onSave: (data: any) => void;
   initialData: {
-    businessName: string;
-    category: string;
-    serviceType: string;
-    website: string;
-    location: string;
-    isRegistered: boolean;
-    priceRange: string;
-    accountManagement: string;
+    business_name?: string;
+    category?: string;
+    service_type?: string;
+    website?: string;
+    location?: string;
+    business_status?: string;
+    price_range?: string;
+    account_status?: string;
   };
 }
 
@@ -33,10 +33,29 @@ const BusinessEditModal: React.FC<BusinessEditModalProps> = ({
   onSave,
   initialData,
 }) => {
-  const [formData, setFormData] = useState(initialData);
+  const [formData, setFormData] = useState({
+    business_name: initialData.business_name || '',
+    category: initialData.category || '',
+    business_status: initialData.business_status || 'Registered',
+    service_type: initialData.service_type || '',
+    website: initialData.website || '',
+    location: initialData.location || '',
+    price_range: initialData.price_range || '',
+    account_status: initialData.account_status || 'Public'
+  });
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    setFormData(initialData);
+    setFormData({
+      business_name: initialData.business_name || '',
+      category: initialData.category || '',
+      business_status: initialData.business_status || 'Registered',
+      service_type: initialData.service_type || '',
+      website: initialData.website || '',
+      location: initialData.location || '',
+      price_range: initialData.price_range || '',
+      account_status: initialData.account_status || 'Public'
+    });
   }, [initialData]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -62,8 +81,10 @@ const BusinessEditModal: React.FC<BusinessEditModalProps> = ({
     }));
   };
 
-  const handleSubmit = () => {
-    onSave(formData);
+  const handleSubmit = async () => {
+    setIsSaving(true);
+    await onSave(formData);
+    setIsSaving(false);
   };
 
   return (
@@ -74,12 +95,12 @@ const BusinessEditModal: React.FC<BusinessEditModalProps> = ({
         </DialogHeader>
         <div className="grid gap-4 py-4">
           <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="businessName" className="text-right">
+            <Label htmlFor="business_name" className="text-right">
               Business Name
             </Label>
             <Input
-              id="businessName"
-              value={formData.businessName}
+              id="business_name"
+              value={formData.business_name}
               onChange={handleChange}
               className="col-span-3"
             />
@@ -96,23 +117,23 @@ const BusinessEditModal: React.FC<BusinessEditModalProps> = ({
             />
           </div>
           <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="isRegistered" className="text-right">
+            <Label htmlFor="business_status" className="text-right">
               Business Status
             </Label>
-            <Switch
-              id="isRegistered"
-              checked={formData.isRegistered}
-              onCheckedChange={handleSwitchChange}
+            <Input
+              id="business_status"
+              value={formData.business_status}
+              onChange={handleChange}
               className="col-span-3"
             />
           </div>
           <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="serviceType" className="text-right">
+            <Label htmlFor="service_type" className="text-right">
               Service Type
             </Label>
             <Input
-              id="serviceType"
-              value={formData.serviceType}
+              id="service_type"
+              value={formData.service_type}
               onChange={handleChange}
               className="col-span-3"
             />
@@ -140,37 +161,39 @@ const BusinessEditModal: React.FC<BusinessEditModalProps> = ({
             />
           </div>
           <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="priceRange" className="text-right">
+            <Label htmlFor="price_range" className="text-right">
               Price Range
             </Label>
             <Input
-              id="priceRange"
-              value={formData.priceRange}
+              id="price_range"
+              value={formData.price_range}
+              placeholder="e.g., ₹5,000 - ₹50,000"
               onChange={handleChange}
               className="col-span-3"
             />
           </div>
           <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="accountManagement" className="text-right">
+            <Label htmlFor="account_status" className="text-right">
               Account Management
             </Label>
             <select
-              id="accountManagement"
-              value={formData.accountManagement}
+              id="account_status"
+              value={formData.account_status}
               onChange={handleSelectChange}
-              className="col-span-3 border rounded px-2 py-1 bg-gray-100 text-gray-700 text-sm"
+              className="col-span-3 border rounded px-3 py-2 bg-background text-foreground text-sm"
             >
-              <option value="Select">Select</option>
-              <option value="Option 1">Option 1</option>
-              <option value="Option 2">Option 2</option>
+              <option value="Public">Public</option>
+              <option value="Private">Private</option>
             </select>
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
+          <Button variant="outline" onClick={onClose} disabled={isSaving}>
             Cancel
           </Button>
-          <Button onClick={handleSubmit}>Save changes</Button>
+          <Button onClick={handleSubmit} disabled={isSaving}>
+            {isSaving ? 'Saving...' : 'Save changes'}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

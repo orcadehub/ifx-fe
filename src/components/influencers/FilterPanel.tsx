@@ -54,6 +54,7 @@ type AudienceLanguage = typeof audienceLanguages[number]['value'];
 interface FilterPanelProps {
   isOpen: boolean;
   onClose: () => void;
+  onApply?: () => void;
   followerRange: [number, number];
   setFollowerRange: (range: [number, number]) => void;
   engagementRange: [number, number];
@@ -102,6 +103,7 @@ interface FilterPanelProps {
 const FilterPanel: React.FC<FilterPanelProps> = ({
   isOpen,
   onClose,
+  onApply,
   followerRange,
   setFollowerRange,
   engagementRange,
@@ -178,7 +180,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
                 </SelectTrigger>
                 <SelectContent>
                   {loadingLocations ? <SelectItem value="loading" disabled>Loading...</SelectItem> : countries.map(country => (
-                    <SelectItem key={country.id} value={country.id.toString()}>
+                    <SelectItem key={country.isoCode} value={country.isoCode}>
                       {country.name}
                     </SelectItem>
                   ))}
@@ -191,7 +193,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
                 </SelectTrigger>
                 <SelectContent>
                   {loadingLocations ? <SelectItem value="loading" disabled>Loading...</SelectItem> : states.map(state => (
-                    <SelectItem key={state.id} value={state.id.toString()}>
+                    <SelectItem key={state.isoCode} value={state.isoCode}>
                       {state.name}
                     </SelectItem>
                   ))}
@@ -204,7 +206,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
                 </SelectTrigger>
                 <SelectContent>
                   {loadingLocations ? <SelectItem value="loading" disabled>Loading...</SelectItem> : cities.map(city => (
-                    <SelectItem key={city.id} value={city.id.toString()}>
+                    <SelectItem key={city.name} value={city.name}>
                       {city.name}
                     </SelectItem>
                   ))}
@@ -222,8 +224,8 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
                 </SelectTrigger>
                 <SelectContent>
                   {loadingNiches ? <SelectItem value="loading" disabled>Loading...</SelectItem> : niches.map(niche => (
-                    <SelectItem key={niche.id} value={niche.id.toString()}>
-                      {niche.name}
+                    <SelectItem key={niche} value={niche}>
+                      {niche}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -250,14 +252,14 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
           <div className="space-y-2">
             <h3 className="font-medium mb-2">Engagement Rate</h3>
             <div className="px-2">
-              <RangeSlider label="" min={0} value={engagementRange} max={10} step={0.1} onChange={setEngagementRange} formatValue={value => `${value}%`} direction="rtl" />
+              <RangeSlider label="" min={0} value={engagementRange} max={10} step={0.1} onChange={setEngagementRange} formatValue={value => `${value}%`} />
             </div>
           </div>
 
           <div className="space-y-2">
             <h3 className="font-medium mb-2">Follower Count</h3>
             <div className="px-2">
-              <RangeSlider label="" min={0} value={followerRange} max={1500000} step={10000} onChange={setFollowerRange} formatValue={value => formatNumber(value)} direction="rtl" />
+              <RangeSlider label="" min={0} value={followerRange} max={1500000} step={10000} onChange={setFollowerRange} formatValue={value => formatNumber(value)} />
             </div>
           </div>
 
@@ -446,7 +448,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
       </div>
       <div className="p-4 border-t flex justify-end gap-2">
         <Button variant="outline" onClick={onClose}>Cancel</Button>
-        <Button onClick={onClose}>Update</Button>
+        <Button onClick={() => { onApply?.(); onClose(); }}>Update</Button>
       </div>
     </div>
   );
